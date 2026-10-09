@@ -7,3 +7,4 @@ tools/pw/package*.json
 gateway/urt-gateway
 data/
 dist/
+scratch/
