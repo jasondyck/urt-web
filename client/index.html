@@ -242,12 +242,21 @@ async function fullscreen() {
     await navigator.keyboard?.lock?.(['Escape']);
   } catch { /* not allowed here; windowed still works */ }
   $('canvas').focus();
+  captureMouse();
 }
 $('fs').addEventListener('click', fullscreen);
 // only show the button while the mouse is free (menus, after Esc)
 document.addEventListener('pointerlockchange', () => {
   $('fs').style.visibility = document.pointerLockElement ? 'hidden' : 'visible';
 });
+// SDL only re-requests pointer lock from mousedown, and only if its own
+// request went through earlier; Safari can refuse both, leaving a free cursor
+// that drives the camera until it hits the screen edge. Capture on any click.
+function captureMouse() {
+  if (document.pointerLockElement) return;
+  try { $('canvas').requestPointerLock()?.catch?.(() => {}); } catch { /* retried on next click */ }
+}
+$('canvas').addEventListener('click', captureMouse);
 
 async function start(name, blobs) {
   const server = servers.servers[0];
