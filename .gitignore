@@ -4,3 +4,4 @@ runs/
 web/
 tools/pw/node_modules/
 tools/pw/package*.json
+gateway/urt-gateway
