@@ -12,12 +12,18 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"net/netip"
 	"os"
+	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -62,6 +68,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", handleWS)
+	mux.HandleFunc("/status.json", handleStatus)
 	mux.HandleFunc("/servers.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
@@ -76,16 +83,122 @@ func main() {
 func staticHandler(dir string) http.Handler {
 	fs := http.FileServer(http.Dir(dir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
 		switch {
-		case strings.HasSuffix(r.URL.Path, ".wasm"):
+		case strings.HasSuffix(p, ".wasm"):
 			w.Header().Set("Content-Type", "application/wasm")
-		case strings.HasSuffix(r.URL.Path, ".pk3"):
-			// pk3s are content-addressed by the manifest, safe to cache hard
+		case strings.HasSuffix(p, ".js"):
+			w.Header().Set("Content-Type", "text/javascript")
+		case strings.HasSuffix(p, ".pk3"):
+			// pk3 names carry a content hash, so they never change
 			w.Header().Set("Content-Type", "application/octet-stream")
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
+		if !strings.HasSuffix(p, ".pk3") {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		// serve foo.gz (made at dist time) for foo when the browser accepts gzip
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !strings.HasSuffix(p, "/") {
+			if f, err := os.Open(filepath.Join(dir, filepath.FromSlash(path.Clean(p))+".gz")); err == nil {
+				defer f.Close()
+				if st, err := f.Stat(); err == nil && !st.IsDir() {
+					w.Header().Set("Content-Encoding", "gzip")
+					w.Header().Add("Vary", "Accept-Encoding")
+					if w.Header().Get("Content-Type") == "" {
+						w.Header().Set("Content-Type", mime.TypeByExtension(filepath.Ext(p)))
+					}
+					http.ServeContent(w, r, "", st.ModTime(), f)
+					return
+				}
+			}
+		}
 		fs.ServeHTTP(w, r)
 	})
+}
+
+// --- server status for the lobby page ---------------------------------------
+
+type player struct {
+	Name  string `json:"name"`
+	Score int    `json:"score"`
+	Ping  int    `json:"ping"`
+}
+
+type status struct {
+	Online     bool     `json:"online"`
+	Hostname   string   `json:"hostname,omitempty"`
+	Map        string   `json:"map,omitempty"`
+	Gametype   string   `json:"gametype,omitempty"`
+	MaxPlayers int      `json:"maxPlayers,omitempty"`
+	Players    []player `json:"players"`
+}
+
+var gametypes = map[string]string{
+	"0": "Free for all", "1": "Last man standing", "3": "Team deathmatch", "4": "Team survivor",
+	"5": "Follow the leader", "6": "Capture and hold", "7": "Capture the flag", "8": "Bomb mode",
+	"9": "Jump", "10": "Freeze tag", "11": "Gun game",
+}
+
+var (
+	statusMu   sync.Mutex
+	statusAt   time.Time
+	statusLast []byte
+)
+
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	statusMu.Lock()
+	if time.Since(statusAt) > 2*time.Second {
+		b, _ := json.Marshal(queryStatus(servers[0]))
+		statusLast, statusAt = b, time.Now()
+	}
+	b := statusLast
+	statusMu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(b)
+}
+
+// queryStatus sends a Quake 3 "getstatus" and parses the reply:
+// "\xff\xff\xff\xffstatusResponse\n\\key\\value...\n<score> <ping> \"name\"\n..."
+func queryStatus(addr string) status {
+	st := status{Players: []player{}}
+	conn, err := net.Dial("udp4", addr)
+	if err != nil {
+		return st
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(time.Second))
+	if _, err := conn.Write([]byte("\xff\xff\xff\xffgetstatus\n")); err != nil {
+		return st
+	}
+	buf := make([]byte, 16384)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return st
+	}
+	lines := strings.Split(string(buf[:n]), "\n")
+	if len(lines) < 2 || !strings.HasSuffix(lines[0], "statusResponse") {
+		return st
+	}
+	kv := strings.Split(strings.TrimPrefix(lines[1], "\\"), "\\")
+	info := map[string]string{}
+	for i := 0; i+1 < len(kv); i += 2 {
+		info[strings.ToLower(kv[i])] = kv[i+1]
+	}
+	st.Online = true
+	st.Hostname = info["sv_hostname"]
+	st.Map = info["mapname"]
+	st.Gametype = gametypes[info["g_gametype"]]
+	st.MaxPlayers, _ = strconv.Atoi(info["sv_maxclients"])
+	for _, l := range lines[2:] {
+		var p player
+		if i := strings.Index(l, "\""); i > 0 {
+			fmt.Sscanf(l[:i], "%d %d", &p.Score, &p.Ping)
+			p.Name = strings.Trim(l[i:], "\"")
+			st.Players = append(st.Players, p)
+		}
+	}
+	return st
 }
 
 func handleWS(w http.ResponseWriter, r *http.Request) {

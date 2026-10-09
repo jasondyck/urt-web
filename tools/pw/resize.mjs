@@ -1,0 +1,20 @@
+// Join via the lobby, then resize the window mid-game and check rendering survives.
+import { chromium } from 'playwright';
+const [url] = process.argv.slice(2);
+const browser = await chromium.launch({ headless: true, args: ['--enable-gpu', '--ignore-gpu-blocklist', '--use-gl=angle', '--use-angle=gl-egl'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const t0 = Date.now();
+const log = (s) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${s}`);
+page.on('console', (m) => { const t = m.text(); if (/vid_restart|R_Init|Couldn't|ERROR|CONTEXT|context|Welcome|resiz|mode/i.test(t)) log(t); });
+page.on('pageerror', (e) => log('pageerror: ' + e.message));
+await page.goto(url);
+await page.fill('#name', 'Resizer');
+await page.click('#play');
+await page.waitForEvent('console', { predicate: (m) => /Welcome to Urban/.test(m.text()), timeout: 120000 });
+await page.waitForTimeout(2000);
+await page.screenshot({ path: '/runs/resize-before.png' });
+await page.setViewportSize({ width: 1600, height: 900 });
+await page.waitForTimeout(6000);
+log('canvas ' + await page.evaluate(() => { const c = document.getElementById('canvas'); return `${c.width}x${c.height} css ${c.clientWidth}x${c.clientHeight} screen ${screen.width}x${screen.height}`; }));
+await page.screenshot({ path: '/runs/resize-after.png' });
+await browser.close();

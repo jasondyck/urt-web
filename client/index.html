@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Urban Terror</title>
+<style>
+  :root {
+    --bg: #0d1014; --panel: #161b22; --line: #2a313b; --text: #e6e9ee; --dim: #8b95a3;
+    --accent: #e8a33d; --accent-ink: #1a1206; --good: #5cc28a; --bad: #e5675f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #lobby { min-height: 100%; display: grid; place-items: center; padding: 24px; }
+  .card { width: min(440px, 100%); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 28px; box-shadow: 0 20px 60px rgb(0 0 0 / .45); }
+  h1 { margin: 0 0 2px; font-size: 26px; letter-spacing: .02em; }
+  .sub { margin: 0 0 22px; color: var(--dim); }
+  .server { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border: 1px solid var(--line);
+    border-radius: 10px; margin-bottom: 18px; background: #11151b; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.up { background: var(--good); box-shadow: 0 0 10px var(--good); }
+  .dot.down { background: var(--bad); }
+  .server .meta { color: var(--dim); font-size: 13px; }
+  .server .players { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dim); font-size: 13px; text-align: right; }
+  label { display: block; font-size: 13px; color: var(--dim); margin-bottom: 6px; }
+  input { width: 100%; padding: 11px 12px; border-radius: 9px; border: 1px solid var(--line);
+    background: #0f1318; color: var(--text); font-size: 16px; outline: none; }
+  input:focus { border-color: var(--accent); }
+  button { margin-top: 16px; width: 100%; padding: 12px; border: 0; border-radius: 9px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 16px; }
+  button:disabled { opacity: .55; cursor: default; }
+  .progress { margin-top: 18px; display: none; }
+  .bar { height: 8px; border-radius: 99px; background: #0f1318; border: 1px solid var(--line); overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  .status { margin-top: 8px; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+  .hint { margin-top: 18px; font-size: 12.5px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 14px; }
+  kbd { font: 12px ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: #0f1318; }
+  .error { color: var(--bad); }
+  #game { position: fixed; inset: 0; display: none; background: #000; }
+  /* the engine renders at a fixed size (see renderSize); the browser scales it to fit */
+  #game canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important;
+    object-fit: contain; display: block; outline: none; z-index: 0 !important; }
+  #fs { position: absolute; top: 10px; right: 10px; width: auto; margin: 0; padding: 6px 10px; font-size: 13px;
+    font-weight: 600; background: rgb(22 27 34 / .8); color: var(--text); border: 1px solid var(--line); z-index: 10; }
+  :fullscreen #fs { display: none; }
+</style>
+</head>
+<body>
+<main id="lobby">
+  <div class="card">
+    <h1>Urban Terror</h1>
+    <p class="sub">Runs in your browser. Nothing to install.</p>
+
+    <div class="server" id="server">
+      <span class="dot" id="dot"></span>
+      <div>
+        <div id="srvName">Checking server…</div>
+        <div class="meta" id="srvMeta">&nbsp;</div>
+      </div>
+      <div class="players" id="srvPlayers"></div>
+    </div>
+
+    <form id="form">
+      <label for="name">Your name</label>
+      <input id="name" maxlength="20" autocomplete="nickname" required>
+      <button id="play" type="submit">Play</button>
+    </form>
+
+    <div class="progress" id="progress">
+      <div class="bar"><div id="barFill"></div></div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="hint">
+      First visit downloads the game (<span id="size">…</span>); after that it starts from your browser's cache.
+      In game: click to capture the mouse, <kbd>Esc</kbd> for the menu, <kbd>~</kbd> for the console.
+    </div>
+  </div>
+</main>
+<div id="game">
+  <canvas id="canvas" tabindex="-1"></canvas>
+  <button id="fs" type="button" title="Fullscreen (hold Esc to leave)">⛶ Fullscreen</button>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const MB = (n) => (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + ' MB';
+const CONFIG_KEY = 'urt-web.q3config';
+const NAME_KEY = 'urt-web.name';
+
+// ---- server status -------------------------------------------------------
+async function refreshStatus() {
+  try {
+    const s = await (await fetch('status.json', { cache: 'no-store' })).json();
+    $('dot').className = 'dot ' + (s.online ? 'up' : 'down');
+    $('srvName').textContent = s.online ? stripColors(s.hostname || 'Server') : 'Server offline';
+    $('srvMeta').textContent = s.online ? `${s.map} · ${s.gametype}` : 'It may be restarting';
+    $('srvPlayers').innerHTML = s.online ? `${s.players.length}/${s.maxPlayers}<br>players` : '';
+    $('srvPlayers').title = s.online ? s.players.map((p) => stripColors(p.name)).join(', ') : '';
+  } catch {
+    $('dot').className = 'dot down';
+    $('srvName').textContent = 'Server unreachable';
+  }
+}
+const stripColors = (s) => s.replace(/\^./g, '');
+refreshStatus();
+const statusTimer = setInterval(refreshStatus, 5000);
+
+// ---- pack cache (IndexedDB: works on plain http, unlike the Cache API) -----
+function idb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('urt-web', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('packs');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+const tx = (db, mode, fn) => new Promise((resolve, reject) => {
+  const t = db.transaction('packs', mode);
+  const r = fn(t.objectStore('packs'));
+  t.oncomplete = () => resolve(r && r.result);
+  t.onerror = () => reject(t.error);
+});
+
+async function fetchWithProgress(url, onBytes) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  const reader = res.body.getReader();
+  const chunks = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    onBytes(value.length);
+  }
+  return new Blob(chunks);
+}
+
+async function loadPacks(manifest, onProgress) {
+  const db = await idb();
+  const wanted = new Set(manifest.packs.map((p) => p.file));
+  // drop packs from older versions
+  const keys = await tx(db, 'readonly', (s) => s.getAllKeys());
+  await tx(db, 'readwrite', (s) => keys.filter((k) => !wanted.has(k)).forEach((k) => s.delete(k)));
+
+  const total = manifest.packs.reduce((n, p) => n + p.size, 0);
+  let done = 0;
+  const blobs = [];
+  for (const p of manifest.packs) {
+    let blob = await tx(db, 'readonly', (s) => s.get(p.file));
+    if (!blob || blob.size !== p.size) {
+      blob = await fetchWithProgress(p.file, (n) => { done += n; onProgress(done, total, p.name, false); });
+      await tx(db, 'readwrite', (s) => s.put(blob, p.file));
+    } else {
+      done += p.size;
+      onProgress(done, total, p.name, true);
+    }
+    blobs.push({ name: p.file.split('/').pop(), blob });
+  }
+  db.close();
+  return blobs;
+}
+
+// ---- lobby ---------------------------------------------------------------
+const [manifest, servers] = await Promise.all([
+  fetch('manifest.json', { cache: 'no-store' }).then((r) => r.json()),
+  fetch('servers.json', { cache: 'no-store' }).then((r) => r.json()),
+]);
+$('size').textContent = MB(manifest.packs.reduce((n, p) => n + p.size, 0));
+$('name').value = localStorage.getItem(NAME_KEY) || '';
+$('name').focus();
+
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('name').value.trim().replace(/["\\;]/g, '') || 'Player';
+  localStorage.setItem(NAME_KEY, name);
+  $('play').disabled = true;
+  $('name').disabled = true;
+  $('progress').style.display = 'block';
+  navigator.storage?.persist?.().catch(() => {});
+  try {
+    let fromCache = true;
+    const blobs = await loadPacks(manifest, (done, total, pack, cached) => {
+      fromCache &&= cached;
+      $('barFill').style.width = `${(100 * done / total).toFixed(1)}%`;
+      $('status').textContent = cached ? `Loading ${pack} from cache…` : `Downloading ${MB(done)} of ${MB(total)}`;
+    });
+    $('status').textContent = 'Starting…';
+    await start(name, blobs);
+  } catch (err) {
+    console.error(err);
+    $('status').innerHTML = `<span class="error">${err.message || err}</span>`;
+    $('play').disabled = false;
+    $('name').disabled = false;
+  }
+});
+
+// ---- engine --------------------------------------------------------------
+
+// Render at the screen's resolution (capped at 1920 wide to spare slower GPUs) for
+// the whole session; windowed play is the same image scaled down. Changing size
+// later would need vid_restart, which recreates the WebGL context mid-game.
+function renderSize() {
+  const dpr = devicePixelRatio || 1;
+  let w = screen.width * dpr, h = screen.height * dpr;
+  const k = Math.min(1, 1920 / w);
+  return [Math.round(w * k) & ~1, Math.round(h * k) & ~1];
+}
+
+async function fullscreen() {
+  try {
+    await $('game').requestFullscreen({ navigationUI: 'hide' });
+    // with keyboard lock, Esc reaches the game (hold Esc to leave fullscreen)
+    await navigator.keyboard?.lock?.(['Escape']);
+  } catch { /* not allowed here; windowed still works */ }
+  $('canvas').focus();
+}
+$('fs').addEventListener('click', fullscreen);
+// only show the button while the mouse is free (menus, after Esc)
+document.addEventListener('pointerlockchange', () => {
+  $('fs').style.visibility = document.pointerLockElement ? 'hidden' : 'visible';
+});
+
+async function start(name, blobs) {
+  const server = servers.servers[0];
+  const [w, h] = renderSize();
+  const args = [
+    '+set', 'fs_homepath', '.',          // one search path: lookups are slow in the JS filesystem
+    '+set', 'com_basegame', 'q3ut4',
+    '+set', 'com_hunkmegs', '768',       // reserved, only touched pages cost RAM
+    '+set', 'net_enabled', '1',
+    '+set', 'cl_allowDownload', '0',
+    '+set', 'r_fullscreen', '0',         // the page handles fullscreen
+    '+set', 'r_mode', '-1', '+set', 'r_customwidth', String(w), '+set', 'r_customheight', String(h),
+    '+set', 'name', name,
+    '+connect', server,
+  ];
+  const engine = (await import('./engine/ioquake3.js')).default;
+  clearInterval(statusTimer);
+  $('lobby').style.display = 'none';
+  $('game').style.display = 'block';
+  const canvas = $('canvas');
+
+  await engine({
+    canvas,
+    arguments: args,
+    locateFile: (f) => 'engine/' + f,
+    print: (t) => console.log(t),
+    printErr: (t) => console.log(t),
+    preRun: [async (module) => {
+      window.ioq3Module = module;
+      module.addRunDependency('urt-packs');
+      try {
+        module.FS.mkdirTree('/q3ut4');
+        for (const { name, blob } of blobs) {
+          module.FS.writeFile(`/q3ut4/${name}`, new Uint8Array(await blob.arrayBuffer()), { canOwn: true });
+        }
+        const cfg = localStorage.getItem(CONFIG_KEY);
+        if (cfg) module.FS.writeFile('/q3ut4/q3config.cfg', cfg);
+        persistConfig(module);
+      } finally {
+        module.removeRunDependency('urt-packs');
+      }
+    }],
+    onExit: () => location.reload(),
+  });
+}
+
+// The engine rewrites q3config.cfg whenever an archived setting changes;
+// copy it to localStorage so binds and settings survive reloads.
+function persistConfig(module) {
+  let last = localStorage.getItem(CONFIG_KEY);
+  const save = () => {
+    try {
+      const text = module.FS.readFile('/q3ut4/q3config.cfg', { encoding: 'utf8' });
+      if (text !== last) { localStorage.setItem(CONFIG_KEY, text); last = text; }
+    } catch { /* not written yet */ }
+  };
+  setInterval(save, 5000);
+  addEventListener('pagehide', save);
+}
+</script>
+</body>
+</html>

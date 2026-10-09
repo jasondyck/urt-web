@@ -19,6 +19,20 @@ browser: ioq3 engine (WASM/WebGL2)  --wss-->  gateway (Go)  --udp-->  stock Quak
 | `tools/repack.py` | turns the UrT 4.3 pk3s into a core pack + one pack per map (WebP textures, Ogg sounds) |
 | `tools/pw*`, `tools/native-ref` | headless Chromium (real GPU) test, profiling and native-client reference harness |
 
+## Running it (e.g. on a work server)
+
+Needs Docker with compose, git, python3 and ~6 GB free during setup.
+
+```
+git clone --recurse-submodules https://github.com/jasondyck/urt-web && cd urt-web
+./setup.sh                     # downloads UrT 4.3.4, repacks the maps in server/mapcycle.txt, builds, assembles dist/
+docker compose up -d --build   # http://<host>:8080
+```
+
+- Pick maps in `server/mapcycle.txt` (re-run `./setup.sh` after changing it), game settings in `server/server.cfg`.
+- Ports: `URT_HTTP_PORT` (default 8080) for browsers, `URT_UDP_PORT` (default 27960) so installed UrT clients can join the same server. Put them in `.env` to change.
+- First visit downloads ~170 MB for 5 maps into the browser (IndexedDB, works on plain http); later visits start from cache.
+
 ## Game data
 
 Not included (FrozenSand's copyright). Download `UrbanTerror434_full.zip` from urbanterror.info, unzip into
