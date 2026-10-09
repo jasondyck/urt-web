@@ -17,4 +17,9 @@ await players[0].page.waitForTimeout(35000);
 for (const p of players) { await p.page.mouse.click(480, 300); await p.page.keyboard.press('1'); }
 await players[0].page.waitForTimeout(Number(seconds) * 1000 - 35000);
 for (const p of players) await p.page.screenshot({ path: `${out}/mp-${p.name}.png` });
+// memory: type /meminfo into Alice's console
+const a = players[0].page;
+a.on('console', (m) => { const t = m.text(); if (/total hunk in use|tempHighwater/.test(t)) console.log('Alice meminfo: ' + t); });
+await a.keyboard.press('Shift+Escape'); await a.keyboard.type('/meminfo'); await a.keyboard.press('Enter'); await a.waitForTimeout(1000);
+console.log('Alice JS heap MB', await a.evaluate(() => Math.round(performance.memory.usedJSHeapSize / 1e6)));
 await browser.close();

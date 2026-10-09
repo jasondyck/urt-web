@@ -2,10 +2,11 @@
 """Repack Urban Terror 4.3 pk3s into smaller web packs.
 
 - merges every pk3 in the engine's priority order (later pk3 names override earlier)
-- opaque .tga -> .jpg, alpha .tga -> 256-colour palette .png (the engine falls back
-  from a missing .tga to .png/.jpg on its own)
+- textures -> lossy WebP q85 (alpha kept); the engine falls back from a missing
+  .tga/.jpg to .webp on its own. At equal SSIM WebP is ~31% smaller than JPEG and
+  far better than palette PNG for alpha textures (tools/imgbench.py).
 - .wav -> .ogg (Vorbis; the engine falls back from a missing .wav to .ogg)
-- drops bot navigation (.aas) and docs
+- drops bot navigation (.aas), docs, and low-detail model LODs (_1/_2.md3)
 - splits assets used by only one map into that map's pack; everything else goes
   into the core pack. Maps not listed are dropped along with their exclusive assets.
 
@@ -27,7 +28,7 @@ from collections import defaultdict
 
 from PIL import Image
 
-JPEG_QUALITY = 88
+WEBP_QUALITY = 85
 VORBIS_QUALITY = "3"
 DROP_EXT = {".aas", ".doc"}  # .txt must stay: UrT menus are ui/*.txt
 # Only assets under these prefixes may move into a map pack; anything else
@@ -170,18 +171,24 @@ def convert(job):
     if not may_rename:
         return key, data
     try:
-        if ext == ".tga":
+        if ext in (".tga", ".jpg", ".png"):
             im = Image.open(io.BytesIO(data))
             im.load()
-            has_alpha = im.mode in ("RGBA", "LA") and im.getchannel("A").getextrema()[0] < 255
-            if not has_alpha:
-                buf = io.BytesIO()
-                im.convert("L" if im.mode in ("L", "LA") else "RGB").save(buf, "JPEG", quality=JPEG_QUALITY, optimize=True)
-                return strip_ext(key) + ".jpg", buf.getvalue()
+            has_alpha = im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info)
+            im = im.convert("RGBA" if has_alpha else "RGB")
+            if has_alpha and im.getchannel("A").getextrema()[0] == 255:
+                im = im.convert("RGB")
             buf = io.BytesIO()
-            im.convert("RGBA").quantize(256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE).save(buf, "PNG", optimize=True)
-            if len(buf.getvalue()) < len(zlib_size_hint(data)):
-                return strip_ext(key) + ".png", buf.getvalue()
+            im.save(buf, "WEBP", quality=WEBP_QUALITY, method=6)
+            best = buf.getvalue()
+            if im.width * im.height <= 64 * 64:  # tiny/flat images often compress better losslessly
+                buf = io.BytesIO()
+                im.save(buf, "WEBP", lossless=True, method=6)
+                if len(buf.getvalue()) < len(best):
+                    best = buf.getvalue()
+            # re-encoding an already lossy jpg only pays off if it shrinks a lot
+            if ext == ".tga" or len(best) < 0.8 * len(data):
+                return strip_ext(key) + ".webp", best
             return key, data
         if ext == ".wav":
             with tempfile.TemporaryDirectory() as d:
@@ -202,8 +209,9 @@ def may_rename(files, key):
     base, ext = os.path.splitext(key)
     if re.fullmatch(r"maps/[^/]+\.tga", key):
         return False  # minimaps: cgame checks for maps/<map>.tga by exact name
-    if ext == ".tga":
-        return not any(base + e in files for e in (".jpg", ".png"))
+    if ext in IMAGE_EXTS:
+        # only when this is the sole image with that base name, or two would map to one .webp
+        return sum(base + e in files for e in IMAGE_EXTS + (".webp",)) == 1
     if ext == ".wav":
         return base + ".ogg" not in files
     return False
@@ -218,6 +226,9 @@ def main():
     src, out, *maps = sys.argv[1:]
     files = load_merged(src)
     files = {k: v for k, v in files.items() if os.path.splitext(k)[1] not in DROP_EXT}
+    # Low-detail model LODs (foo_1.md3, foo_2.md3) are 37 MB, almost all player
+    # animation frames; the engine renders LOD 0 at every distance without them.
+    files = {k: v for k, v in files.items() if not re.search(r"_[12]\.md3$", k)}
     print(f"{len(files)} merged files")
 
     shaders = parse_shaders(files)
@@ -254,7 +265,7 @@ def main():
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
                 jobs = ((k, read(files, k), may_rename(files, k)) for k in keys)
                 for newkey, data in ex.map(convert, jobs, chunksize=8):
-                    stored = os.path.splitext(newkey)[1] in (".jpg", ".png", ".ogg")
+                    stored = os.path.splitext(newkey)[1] in (".jpg", ".png", ".ogg", ".webp")
                     z.writestr(newkey, data, zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
             blob = buf.getvalue()
             h = hashlib.sha256(blob).hexdigest()[:12]

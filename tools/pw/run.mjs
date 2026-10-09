@@ -1,9 +1,10 @@
 // Load the urt-web client headlessly; dump console + periodic screenshots.
 // usage: node run.mjs <url> [seconds] [outdir] [tag]
 import { chromium } from 'playwright';
+import { execSync } from 'child_process';
 const [url, seconds = '60', out = '/runs', tag = 'run'] = process.argv.slice(2);
 const gpu = process.env.GPU === '1';
-const browser = await chromium.launch({ headless: true, args: gpu ? ['--enable-gpu', '--ignore-gpu-blocklist', '--use-gl=angle', '--use-angle=gl-egl'] : ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
+const browser = await chromium.launch({ headless: true, args: gpu ? ['--enable-gpu', '--ignore-gpu-blocklist', '--use-gl=angle', '--use-angle=gl-egl', '--enable-precise-memory-info'] : ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const t0 = Date.now();
 const log = (s) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${s}`);
@@ -105,6 +106,12 @@ for (let s = 10; s <= Number(seconds); s += 10) {
     await page.keyboard.press('Shift+Escape');
   }
   await page.screenshot({ path: `${out}/${tag}-${s}s.png` });
+  if (process.env.MEMSTATS === '1') log('[rss] ' + execSync("ps -eo rss,args | grep -E 'type=(renderer|gpu-process)' | grep -v grep | awk '{t=$2; for(i=2;i<=NF;i++) if($i ~ /--type=/) t=$i; printf \"%s=%dMB \", t, $1/1024}'").toString());
+  if (process.env.MEMSTATS === '1') log('[mem] ' + JSON.stringify(await page.evaluate(() => ({
+    jsHeapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null,
+    wasmMB: window.ioq3Module ? Math.round(window.ioq3Module.HEAPU8.length / 1e6) : null,
+    memfsMB: window.ioq3Module ? Math.round((function walk(n) { let t = 0; for (const c of Object.values(n.contents || {})) t += c.contents && c.contents.length !== undefined ? (c.usedBytes || c.contents.length) : walk(c); return t; })(window.ioq3Module.FS.lookupPath('/q3ut4').node) / 1e6) : null,
+  }))));
 }
 log('done');
 await browser.close();
