@@ -25,6 +25,10 @@
   .server .meta { color: var(--dim); font-size: 13px; }
   .server .players { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dim); font-size: 13px; text-align: right; }
   label { display: block; font-size: 13px; color: var(--dim); margin-bottom: 6px; }
+  select { width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line);
+    background: #0f1318; color: var(--text); font-size: 15px; outline: none; }
+  select:focus { border-color: var(--accent); }
+  .field + .field { margin-top: 14px; }
   input { width: 100%; padding: 11px 12px; border-radius: 9px; border: 1px solid var(--line);
     background: #0f1318; color: var(--text); font-size: 16px; outline: none; }
   input:focus { border-color: var(--accent); }
@@ -63,8 +67,18 @@
     </div>
 
     <form id="form">
-      <label for="name">Your name</label>
-      <input id="name" maxlength="20" autocomplete="nickname" required>
+      <div class="field">
+        <label for="name">Your name</label>
+        <input id="name" maxlength="20" autocomplete="nickname" required>
+      </div>
+      <div class="field">
+        <label for="res">Resolution</label>
+        <select id="res">
+          <option value="1920">Up to 1080p (recommended)</option>
+          <option value="2560">Up to 1440p</option>
+          <option value="0">Native (sharpest, needs a strong GPU)</option>
+        </select>
+      </div>
       <button id="play" type="submit">Play</button>
     </form>
 
@@ -89,6 +103,7 @@ const $ = (id) => document.getElementById(id);
 const MB = (n) => (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + ' MB';
 const CONFIG_KEY = 'urt-web.q3config';
 const NAME_KEY = 'urt-web.name';
+const RES_KEY = 'urt-web.maxWidth';
 
 // ---- server status -------------------------------------------------------
 async function refreshStatus() {
@@ -170,12 +185,21 @@ const [manifest, servers] = await Promise.all([
 ]);
 $('size').textContent = MB(manifest.packs.reduce((n, p) => n + p.size, 0));
 $('name').value = localStorage.getItem(NAME_KEY) || '';
+$('res').value = localStorage.getItem(RES_KEY) || '1920';
+// only offer what this screen can use
+{
+  const native = Math.round(screen.width * (devicePixelRatio || 1));
+  for (const o of [...$('res').options]) if (+o.value && +o.value >= native) o.remove();
+  $('res').options[$('res').options.length - 1].textContent += ` – ${native}px wide`;
+  if (![...$('res').options].some((o) => o.value === $('res').value)) $('res').value = $('res').options[0].value;
+}
 $('name').focus();
 
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = $('name').value.trim().replace(/["\\;]/g, '') || 'Player';
   localStorage.setItem(NAME_KEY, name);
+  localStorage.setItem(RES_KEY, $('res').value);
   $('play').disabled = true;
   $('name').disabled = true;
   $('progress').style.display = 'block';
@@ -199,13 +223,15 @@ $('form').addEventListener('submit', async (e) => {
 
 // ---- engine --------------------------------------------------------------
 
-// Render at the screen's resolution (capped at 1920 wide to spare slower GPUs) for
-// the whole session; windowed play is the same image scaled down. Changing size
-// later would need vid_restart, which recreates the WebGL context mid-game.
+// Render at the screen's aspect ratio, capped at the chosen width (1080p by default:
+// 4K is 4x the pixels to light), for the whole session; the browser scales it to
+// the window. Changing size later would need vid_restart, which recreates the
+// WebGL context mid-game.
 function renderSize() {
   const dpr = devicePixelRatio || 1;
   let w = screen.width * dpr, h = screen.height * dpr;
-  const k = Math.min(1, 1920 / w);
+  const cap = +$('res').value || w;
+  const k = Math.min(1, cap / w);
   return [Math.round(w * k) & ~1, Math.round(h * k) & ~1];
 }
 
