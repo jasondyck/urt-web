@@ -25,5 +25,9 @@ PY
 for f in "$OUT.tmp/index.html" "$OUT.tmp/manifest.json" "$OUT.tmp/engine/ioquake3.js" "$OUT.tmp/engine/ioquake3.wasm"; do
   gzip -9 -k -n "$f"
 done
-rm -rf "$OUT" && mv "$OUT.tmp" "$OUT"
+# swap contents in place: a running container's bind mount keeps pointing at
+# the original directory, so replacing the directory itself would orphan it
+mkdir -p "$OUT"
+find "$OUT" -mindepth 1 -delete
+mv "$OUT.tmp"/* "$OUT"/ && rmdir "$OUT.tmp"
 du -sh "$OUT" | cut -f1 | xargs echo "dist ready in $OUT:"
