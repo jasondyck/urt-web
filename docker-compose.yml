@@ -9,6 +9,7 @@ services:
     entrypoint: ["/entrypoint.sh"]
     environment:
       HOME: /home/urt   # the UrT binary creates ~/.q3a even with fs_homepath set
+      URT_RCON_PASSWORD: ${URT_RCON_PASSWORD:-}   # set in .env to allow /rcon
     volumes:
       - ./data/UrbanTerror43:/urt:ro
       - ./server/entrypoint.sh:/entrypoint.sh:ro
