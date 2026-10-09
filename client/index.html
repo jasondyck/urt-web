@@ -103,6 +103,7 @@
 const $ = (id) => document.getElementById(id);
 const MB = (n) => (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + ' MB';
 const CONFIG_KEY = 'urt-web.q3config';
+const QPORT_KEY = 'urt-web.qport';
 const NAME_KEY = 'urt-web.name';
 const RES_KEY = 'urt-web.maxWidth';
 
@@ -272,6 +273,16 @@ $('canvas').addEventListener('click', captureMouse);
 async function start(name, blobs) {
   const server = servers.servers[0];
   const [w, h] = renderSize();
+  // Every browser reaches the server from the gateway's address, and the engine
+  // picks a random qport on each start, so a refresh looked like a new player and
+  // the old one lingered until it timed out. Keep the tab's qport across reloads:
+  // the server then reuses the player's slot (same address and qport).
+  let qport;
+  try { qport = sessionStorage.getItem(QPORT_KEY); } catch { /* storage blocked */ }
+  if (!qport) {
+    qport = String(1 + crypto.getRandomValues(new Uint16Array(1))[0] % 65535);
+    try { sessionStorage.setItem(QPORT_KEY, qport); } catch { /* storage blocked */ }
+  }
   const args = [
     '+set', 'fs_homepath', '.',          // one search path: lookups are slow in the JS filesystem
     '+set', 'com_basegame', 'q3ut4',
@@ -286,6 +297,7 @@ async function start(name, blobs) {
     '+set', 'r_fullscreen', '0',         // the page handles fullscreen
     '+set', 'r_mode', '-1', '+set', 'r_customwidth', String(w), '+set', 'r_customheight', String(h),
     '+set', 'name', name,
+    '+set', 'net_qport', qport,
     '+connect', server,
   ];
   const engine = (await import('./engine/ioquake3.js')).default;
