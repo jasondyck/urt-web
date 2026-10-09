@@ -258,6 +258,11 @@ async function start(name, blobs) {
     '+set', 'com_hunkmegs', '768',       // reserved, only touched pages cost RAM
     '+set', 'net_enabled', '1',
     '+set', 'cl_allowDownload', '0',
+    // Classic UrT look: skip the newer renderer's normal/specular/deluxe/cubemap
+    // and sun-shadow passes. Looks the same as the original game and is ~1.7x
+    // cheaper per pixel, which is what limits laptops at high resolutions.
+    '+set', 'r_normalMapping', '0', '+set', 'r_specularMapping', '0', '+set', 'r_deluxeMapping', '0',
+    '+set', 'r_cubeMapping', '0', '+set', 'r_sunlightMode', '0', '+set', 'r_dlightMode', '0',
     '+set', 'r_fullscreen', '0',         // the page handles fullscreen
     '+set', 'r_mode', '-1', '+set', 'r_customwidth', String(w), '+set', 'r_customheight', String(h),
     '+set', 'name', name,
