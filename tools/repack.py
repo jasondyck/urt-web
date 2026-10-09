@@ -35,6 +35,15 @@ DROP_EXT = {".aas", ".doc"}  # .txt must stay: UrT menus are ui/*.txt
 # (weapons, players, UI, gfx) could be used by game code, so it stays in core.
 MAP_PREFIXES = ("textures/", "env/", "maps/", "levelshots/", "models/mapobjects/", "sound/")
 IMAGE_EXTS = (".tga", ".jpg", ".png")
+# Browser mouse input runs faster than the desktop game's, so start players at a
+# lower sensitivity and give the menu slider a range where 50% is still usable
+# (stock: default 5 on a 1-30 slider). A saved config still wins over default.cfg.
+SENSITIVITY_SLIDER = (b'cvarfloat "sensitivity" 5 1 30', b'cvarfloat "sensitivity" 2.5 0.5 10')
+TEXT_PATCHES = {
+    "ui/controls.menu": [SENSITIVITY_SLIDER],
+    "ui/ingame_controls.menu": [SENSITIVITY_SLIDER],
+    "default.cfg": [(b'seta in_mouse "-1"', b'seta in_mouse "-1"\r\nseta sensitivity "2.5"')],
+}
 
 
 def pk3_priority(name):
@@ -168,6 +177,10 @@ def map_refs(files, shaders, bsp_key):
 def convert(job):
     key, data, may_rename = job
     ext = os.path.splitext(key)[1]
+    for a, b in TEXT_PATCHES.get(key, []):
+        if a not in data:
+            raise ValueError(f"{key}: patch target not found: {a!r}")
+        data = data.replace(a, b)
     if not may_rename:
         return key, data
     try:
@@ -178,12 +191,16 @@ def convert(job):
             im = im.convert("RGBA" if has_alpha else "RGB")
             if has_alpha and im.getchannel("A").getextrema()[0] == 255:
                 im = im.convert("RGB")
+            # exact: keep the colour under fully transparent pixels. Shaders that blend
+            # by colour ignore alpha (the sniper scope is RGB art with alpha all 0), and
+            # the encoder would otherwise black it out.
+            exact = im.mode == "RGBA"
             buf = io.BytesIO()
-            im.save(buf, "WEBP", quality=WEBP_QUALITY, method=6)
+            im.save(buf, "WEBP", quality=WEBP_QUALITY, method=6, exact=exact)
             best = buf.getvalue()
             if im.width * im.height <= 64 * 64:  # tiny/flat images often compress better losslessly
                 buf = io.BytesIO()
-                im.save(buf, "WEBP", lossless=True, method=6)
+                im.save(buf, "WEBP", lossless=True, method=6, exact=exact)
                 if len(buf.getvalue()) < len(best):
                     best = buf.getvalue()
             # re-encoding an already lossy jpg only pays off if it shrinks a lot
