@@ -47,6 +47,9 @@ func main() {
 	listen := flag.String("listen", envOr("URT_LISTEN", ":8080"), "HTTP listen address")
 	webDir := flag.String("web", envOr("URT_WEB", "./web"), "directory with the web client")
 	serverList := flag.String("servers", os.Getenv("URT_SERVERS"), "comma-separated host:port of allowed game servers; the first is the default")
+	tlsListen := flag.String("tls-listen", envOr("URT_TLS_LISTEN", ":8443"), "HTTPS listen address, used when the certificate exists")
+	tlsCert := flag.String("tls-cert", os.Getenv("URT_TLS_CERT"), "PEM certificate for HTTPS")
+	tlsKey := flag.String("tls-key", os.Getenv("URT_TLS_KEY"), "PEM private key for HTTPS")
 	flag.Parse()
 
 	for _, s := range strings.Split(*serverList, ",") {
@@ -76,6 +79,15 @@ func main() {
 	})
 	mux.Handle("/", staticHandler(*webDir))
 
+	// https is optional: without a certificate (tools/cert.sh) only http is served
+	if *tlsCert != "" {
+		if _, err := os.Stat(*tlsCert); err == nil {
+			log.Printf("https on %s with %s", *tlsListen, *tlsCert)
+			go func() { log.Fatal(http.ListenAndServeTLS(*tlsListen, *tlsCert, *tlsKey, mux)) }()
+		} else {
+			log.Printf("no https: %v", err)
+		}
+	}
 	log.Printf("listening on %s, serving %s, servers %v", *listen, *webDir, servers)
 	log.Fatal(http.ListenAndServe(*listen, mux))
 }
