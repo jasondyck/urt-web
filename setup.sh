@@ -5,7 +5,8 @@
 #   2. repacks the maps in server/mapcycle.txt for the browser into data/packed
 #   3. builds the WASM engine (src/ioq3 submodule) in the emscripten container
 #   4. assembles the website into dist/
-# Then: docker compose up -d --build   and open http://<host>:8080
+#   5. makes a self-signed certificate for https (data/tls), unless one exists
+# Then: docker compose up -d --build   and open http://<host>:8080 or https://<host>:8443
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -38,6 +39,8 @@ tools/build.sh
 echo "== assembling the site"
 tools/dist.sh data/packed dist
 
+[ -f data/tls/cert.pem ] || tools/cert.sh
+
 echo
 echo "Done. Start it with:  docker compose up -d --build"
-echo "Then open http://$(hostname -f 2>/dev/null || hostname):8080"
+echo "Then open http://$(hostname -f 2>/dev/null || hostname):8080 (or https on :8443, after accepting the certificate warning)"

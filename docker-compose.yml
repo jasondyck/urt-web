@@ -1,5 +1,6 @@
-# Browser Urban Terror: the gateway serves the site on :8080 and relays browser
-# packets to the stock UrT server. Run ./setup.sh once before `docker compose up -d`.
+# Browser Urban Terror: the gateway serves the site on :8080 (and :8443 over https
+# once tools/cert.sh has made a certificate) and relays browser packets to the stock
+# UrT server. Run ./setup.sh once before `docker compose up -d`.
 services:
   server:
     image: debian:12-slim
@@ -8,6 +9,7 @@ services:
     entrypoint: ["/entrypoint.sh"]
     environment:
       HOME: /home/urt   # the UrT binary creates ~/.q3a even with fs_homepath set
+      URT_RCON_PASSWORD: ${URT_RCON_PASSWORD:-}   # set in .env to allow /rcon
     volumes:
       - ./data/UrbanTerror43:/urt:ro
       - ./server/entrypoint.sh:/entrypoint.sh:ro
@@ -26,12 +28,16 @@ services:
     restart: unless-stopped
     environment:
       URT_SERVERS: 172.31.27.10:27960
+      URT_TLS_CERT: /tls/cert.pem
+      URT_TLS_KEY: /tls/key.pem
     volumes:
       - ./dist:/web:ro
+      - ./data/tls:/tls:ro
     networks:
       urt:
     ports:
       - "${URT_HTTP_PORT:-8080}:8080"
+      - "${URT_HTTPS_PORT:-8443}:8443"
     depends_on:
       - server
 
