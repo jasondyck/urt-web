@@ -1,0 +1,4 @@
+[submodule "src/ioq3"]
+	path = src/ioq3
+	url = https://github.com/jasondyck/ioq3-urt-web.git
+	branch = urt
