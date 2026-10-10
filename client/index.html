@@ -10,6 +10,7 @@
     --accent: #e8a33d; --accent-ink: #1a1206; --good: #5cc28a; --bad: #e5675f;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   #lobby { min-height: 100%; display: grid; place-items: center; padding: 24px; }
@@ -42,6 +43,23 @@
   .hint { margin-top: 18px; font-size: 12.5px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 14px; }
   kbd { font: 12px ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: #0f1318; }
   .error { color: var(--bad); }
+  #joinPanel, #hostPanel { margin-top: 14px; }
+  .tabs { display: flex; gap: 4px; margin: 18px 0 0; padding: 4px; border-radius: 10px; background: #0f1318; border: 1px solid var(--line); }
+  .tabs button { margin: 0; padding: 8px; font-size: 14px; background: transparent; color: var(--dim); }
+  .tabs button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 0 var(--line); }
+  .games { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
+  .games .server { margin: 0; cursor: pointer; }
+  .games .server.on { border-color: var(--accent); }
+  .games .empty { color: var(--dim); font-size: 13px; padding: 6px 2px; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; min-width: 0; }
+  .row > .field + .field { margin-top: 0; }
+  .row + .field { margin-top: 14px; }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: 14px; margin: 14px 0 0; }
+  .check input { width: auto; }
+  #invite { position: absolute; top: 10px; left: 10px; width: auto; margin: 0; padding: 6px 10px; font-size: 13px;
+    font-weight: 600; background: rgb(22 27 34 / .8); color: var(--text); border: 1px solid var(--line); z-index: 10; display: none; }
+  :fullscreen #invite { display: none !important; }
   #game { position: fixed; inset: 0; display: none; background: #000; }
   /* the engine renders at a fixed size (see renderSize); the browser scales it to fit */
   #game canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important;
@@ -57,28 +75,60 @@
     <h1>Urban Terror</h1>
     <p class="sub">Runs in your browser. Nothing to install.</p>
 
-    <div class="server" id="server">
-      <span class="dot" id="dot"></span>
-      <div>
-        <div id="srvName">Checking server…</div>
-        <div class="meta" id="srvMeta">&nbsp;</div>
-      </div>
-      <div class="players" id="srvPlayers"></div>
-    </div>
-
     <form id="form">
-      <div class="field">
-        <label for="name">Your name</label>
-        <input id="name" maxlength="20" autocomplete="nickname" required>
+      <div class="row">
+        <div class="field">
+          <label for="name">Your name</label>
+          <input id="name" maxlength="20" autocomplete="nickname" required>
+        </div>
+        <div class="field">
+          <label for="res">Resolution</label>
+          <select id="res">
+            <option value="1920">Up to 1080p</option>
+            <option value="2560">Up to 1440p</option>
+            <option value="0">Native (sharpest)</option>
+          </select>
+        </div>
       </div>
-      <div class="field">
-        <label for="res">Resolution</label>
-        <select id="res">
-          <option value="1920">Up to 1080p (recommended)</option>
-          <option value="2560">Up to 1440p</option>
-          <option value="0">Native (sharpest, needs a strong GPU)</option>
-        </select>
+
+      <div class="tabs" id="tabs" hidden>
+        <button type="button" data-tab="join" class="on">Join a game</button>
+        <button type="button" data-tab="host">Host a game</button>
       </div>
+
+      <div id="joinPanel">
+        <label>Games</label>
+        <div class="games" id="games"><div class="empty">Looking for games…</div></div>
+        <div class="field" id="codeField" hidden style="margin-top: 14px">
+          <label for="code">Or enter an invite code</label>
+          <input id="code" maxlength="12" autocomplete="off" spellcheck="false" placeholder="K7QM2X"
+            style="text-transform: uppercase; letter-spacing: .12em">
+        </div>
+      </div>
+
+      <div id="hostPanel" hidden>
+        <div class="row">
+          <div class="field"><label for="map">Map</label><select id="map"></select></div>
+          <div class="field">
+            <label for="gametype">Mode</label>
+            <select id="gametype">
+              <option value="4">Team Survivor</option>
+              <option value="3">Team Deathmatch</option>
+              <option value="0">Free for All</option>
+              <option value="7">Capture the Flag</option>
+              <option value="8">Bomb</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="maxPlayers">Players</label>
+          <select id="maxPlayers">
+            <option>4</option><option selected>8</option><option>12</option><option>16</option>
+          </select>
+        </div>
+        <label class="check"><input type="checkbox" id="listed" checked> List it so anyone can join</label>
+      </div>
+
       <button id="play" type="submit">Play</button>
     </form>
 
@@ -90,12 +140,14 @@
     <div class="hint">
       First visit downloads the game (<span id="size">…</span>); after that it starts from your browser's cache.
       In game: click to capture the mouse, <kbd>Esc</kbd> for the menu, <kbd>~</kbd> for the console.
+      <span id="hostHint" hidden>Hosted games run in the host’s browser and end when the host leaves.</span>
     </div>
   </div>
 </main>
 <div id="game">
   <canvas id="canvas" tabindex="-1"></canvas>
   <button id="fs" type="button" title="Fullscreen (hold Esc to leave)">⛶ Fullscreen</button>
+  <button id="invite" type="button" title="Copy a link others can use to join">Copy invite link</button>
 </div>
 
 <script type="module">
@@ -105,23 +157,83 @@ const CONFIG_KEY = 'urt-web.q3config';
 const NAME_KEY = 'urt-web.name';
 const RES_KEY = 'urt-web.maxWidth';
 
-// ---- server status -------------------------------------------------------
-async function refreshStatus() {
-  try {
-    const s = await (await fetch('status.json', { cache: 'no-store' })).json();
-    $('dot').className = 'dot ' + (s.online ? 'up' : 'down');
-    $('srvName').textContent = s.online ? stripColors(s.hostname || 'Server') : 'Server offline';
-    $('srvMeta').textContent = s.online ? `${s.map} · ${s.gametype}` : 'It may be restarting';
-    $('srvPlayers').innerHTML = s.online ? `${s.players.length}/${s.maxPlayers}<br>players` : '';
-    $('srvPlayers').title = s.online ? s.players.map((p) => stripColors(p.name)).join(', ') : '';
-  } catch {
-    $('dot').className = 'dot down';
-    $('srvName').textContent = 'Server unreachable';
+// ---- configuration --------------------------------------------------------
+// config.json (optional): { "signalUrl": "https://…", "assetBase": "https://…/" }
+//   signalUrl  matchmaking Worker for browser-hosted games (signal/worker.js)
+//   assetBase  where manifest.json and the packs live, if not next to this page
+// servers.json (optional, served by the gateway): dedicated servers to offer.
+const getJson = (url) => fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const [config, servers] = await Promise.all([getJson('config.json'), getJson('servers.json')]);
+const signalUrl = config?.signalUrl || null;
+const assetBase = new URL(config?.assetBase || './', location.href).href;
+const p2p = signalUrl ? await import('./p2p.js') : null;
+
+const stripColors = (s) => String(s).replace(/\^./g, '');
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const GAMETYPES = { 0: 'Free for All', 3: 'Team Deathmatch', 4: 'Team Survivor', 7: 'Capture the Flag', 8: 'Bomb' };
+
+// ---- game list -------------------------------------------------------------
+// choice: { kind: 'server', address } | { kind: 'room', room } | { kind: 'host' }
+let choice = null;
+let games = [];
+const hashRoom = location.hash.replace(/^#/, '').toUpperCase();
+
+function renderGames() {
+  if (!games.length) {
+    $('games').innerHTML = `<div class="empty">${p2p ? 'No public games right now. Host one!' : 'No servers found.'}</div>`;
+    return;
   }
+  $('games').innerHTML = games.map((g, i) => `
+    <div class="server${choice && choice.kind === g.kind && (choice.room || choice.address) === (g.room || g.address) ? ' on' : ''}" data-i="${i}">
+      <span class="dot ${g.online ? 'up' : 'down'}"></span>
+      <div>
+        <div>${esc(stripColors(g.name))}</div>
+        <div class="meta">${esc(g.meta)}</div>
+      </div>
+      <div class="players">${g.online ? `${g.players}/${g.max}<br>players` : ''}</div>
+    </div>`).join('');
 }
-const stripColors = (s) => s.replace(/\^./g, '');
-refreshStatus();
-const statusTimer = setInterval(refreshStatus, 5000);
+$('games').addEventListener('click', (e) => {
+  const g = games[e.target.closest('[data-i]')?.dataset.i];
+  if (!g || !g.online) return;
+  choice = g.kind === 'room' ? { kind: 'room', room: g.room } : { kind: 'server', address: g.address };
+  $('code').value = '';
+  renderGames();
+});
+$('code').addEventListener('input', () => {
+  choice = $('code').value.trim() ? { kind: 'room', room: $('code').value.trim().toUpperCase() } : null;
+  renderGames();
+});
+
+async function refreshGames() {
+  const found = [];
+  if (servers?.servers?.length) {
+    const s = await getJson('status.json');
+    found.push({
+      kind: 'server', address: servers.servers[0], online: !!s?.online,
+      name: s?.online ? s.hostname || 'Server' : 'Server offline',
+      meta: s?.online ? `${s.map} · ${s.gametype}` : 'It may be restarting',
+      players: s?.players?.length ?? 0, max: s?.maxPlayers ?? 0,
+    });
+  }
+  if (p2p) {
+    const rooms = await p2p.listRooms(signalUrl).catch(() => []);
+    for (const r of rooms) {
+      found.push({
+        kind: 'room', room: r.room, online: true, name: r.name,
+        meta: `${r.map} · ${GAMETYPES[r.gametype] || r.gametype} · hosted in a browser`, players: r.players, max: r.max,
+      });
+    }
+  }
+  games = found;
+  if (!choice && !hashRoom && games.some((g) => g.online)) {
+    const g = games.find((x) => x.online);
+    choice = g.kind === 'room' ? { kind: 'room', room: g.room } : { kind: 'server', address: g.address };
+  }
+  renderGames();
+}
+refreshGames();
+const statusTimer = setInterval(refreshGames, 5000);
 
 // ---- pack cache (IndexedDB: works on plain http, unlike the Cache API) -----
 function idb() {
@@ -166,7 +278,7 @@ async function loadPacks(manifest, onProgress) {
   for (const p of manifest.packs) {
     let blob = await tx(db, 'readonly', (s) => s.get(p.file));
     if (!blob || blob.size !== p.size) {
-      blob = await fetchWithProgress(p.file, (n) => { done += n; onProgress(done, total, p.name, false); });
+      blob = await fetchWithProgress(new URL(p.file, assetBase), (n) => { done += n; onProgress(done, total, p.name, false); });
       await tx(db, 'readwrite', (s) => s.put(blob, p.file));
     } else {
       done += p.size;
@@ -179,10 +291,7 @@ async function loadPacks(manifest, onProgress) {
 }
 
 // ---- lobby ---------------------------------------------------------------
-const [manifest, servers] = await Promise.all([
-  fetch('manifest.json', { cache: 'no-store' }).then((r) => r.json()),
-  fetch('servers.json', { cache: 'no-store' }).then((r) => r.json()),
-]);
+const manifest = await (await fetch(new URL('manifest.json', assetBase), { cache: 'no-store' })).json();
 $('size').textContent = MB(manifest.packs.reduce((n, p) => n + p.size, 0));
 $('name').value = localStorage.getItem(NAME_KEY) || '';
 $('res').value = localStorage.getItem(RES_KEY) || '1920';
@@ -193,6 +302,27 @@ $('res').value = localStorage.getItem(RES_KEY) || '1920';
   $('res').options[$('res').options.length - 1].textContent += ` – ${native}px wide`;
   if (![...$('res').options].some((o) => o.value === $('res').value)) $('res').value = $('res').options[0].value;
 }
+$('map').innerHTML = manifest.maps.map((m) => `<option value="${esc(m)}">${esc(m.replace(/^ut4_/, ''))}</option>`).join('');
+
+let tab = 'join';
+function setTab(t) {
+  tab = t;
+  for (const b of $('tabs').querySelectorAll('button')) b.classList.toggle('on', b.dataset.tab === t);
+  $('joinPanel').hidden = t !== 'join';
+  $('hostPanel').hidden = t !== 'host';
+  $('play').textContent = t === 'host' ? 'Host game' : 'Join';
+}
+if (p2p) {
+  $('tabs').hidden = false;
+  $('codeField').hidden = false;
+  $('hostHint').hidden = false;
+  $('tabs').addEventListener('click', (e) => e.target.dataset.tab && setTab(e.target.dataset.tab));
+  if (hashRoom) {
+    $('code').value = hashRoom;
+    choice = { kind: 'room', room: hashRoom };
+  }
+}
+setTab('join');
 $('name').focus();
 
 $('form').addEventListener('submit', async (e) => {
@@ -200,6 +330,11 @@ $('form').addEventListener('submit', async (e) => {
   const name = $('name').value.trim().replace(/["\\;]/g, '') || 'Player';
   localStorage.setItem(NAME_KEY, name);
   localStorage.setItem(RES_KEY, $('res').value);
+  if (tab === 'join' && !choice) {
+    $('progress').style.display = 'block';
+    $('status').innerHTML = '<span class="error">Pick a game or enter an invite code.</span>';
+    return;
+  }
   $('play').disabled = true;
   $('name').disabled = true;
   $('progress').style.display = 'block';
@@ -211,8 +346,9 @@ $('form').addEventListener('submit', async (e) => {
       $('barFill').style.width = `${(100 * done / total).toFixed(1)}%`;
       $('status').textContent = cached ? `Loading ${pack} from cache…` : `Downloading ${MB(done)} of ${MB(total)}`;
     });
+    const session = await connect(name);
     $('status').textContent = 'Starting…';
-    await start(name, blobs);
+    await start(name, blobs, session);
   } catch (err) {
     console.error(err);
     $('status').innerHTML = `<span class="error">${err.message || err}</span>`;
@@ -249,9 +385,39 @@ document.addEventListener('pointerlockchange', () => {
   $('fs').style.visibility = document.pointerLockElement ? 'hidden' : 'visible';
 });
 
-async function start(name, blobs) {
-  const server = servers.servers[0];
+// Sets up the network side before the engine starts: nothing for a dedicated
+// server (the gateway WebSocket), a room for hosting, a data channel for joining.
+async function connect(name) {
+  if (tab === 'host') {
+    $('status').textContent = 'Opening a game room…';
+    const map = $('map').value, gametype = +$('gametype').value, max = +$('maxPlayers').value;
+    const host = await p2p.hostGame(signalUrl, {
+      listed: $('listed').checked,
+      onPlayers: (n) => { $('invite').textContent = `Copy invite link · ${n + 1} player${n ? 's' : ''}`; },
+      onStatus: (s) => console.log(`urt: matchmaking ${s}`),
+    });
+    host.setInfo({ name: `${name}’s game`, map, gametype, max });
+    return { kind: 'host', host, map, gametype, max };
+  }
+  if (choice.kind === 'room') {
+    $('status').textContent = 'Finding the game…';
+    const { transport } = await p2p.joinGame(signalUrl, choice.room, {
+      onStatus: (s) => { $('status').textContent = s; },
+      onDisconnect: () => console.warn('urt: lost the connection to the host'),
+    });
+    return { kind: 'room', transport };
+  }
+  return { kind: 'server', address: choice.address };
+}
+
+async function start(name, blobs, session) {
   const [w, h] = renderSize();
+  const net = {
+    server: ['+connect', session.address],
+    room: ['+connect', p2p?.HOST_ADDRESS],
+    // settings in host.cfg (see preRun): the engine's command line is capped at 1024 chars
+    host: ['+exec', 'host.cfg', '+map', session.map],
+  }[session.kind];
   const args = [
     '+set', 'fs_homepath', '.',          // one search path: lookups are slow in the JS filesystem
     '+set', 'com_basegame', 'q3ut4',
@@ -266,7 +432,7 @@ async function start(name, blobs) {
     '+set', 'r_fullscreen', '0',         // the page handles fullscreen
     '+set', 'r_mode', '-1', '+set', 'r_customwidth', String(w), '+set', 'r_customheight', String(h),
     '+set', 'name', name,
-    '+connect', server,
+    ...net,
   ];
   const engine = (await import('./engine/ioquake3.js')).default;
   clearInterval(statusTimer);
@@ -274,19 +440,31 @@ async function start(name, blobs) {
   $('game').style.display = 'block';
   const canvas = $('canvas');
 
+  if (session.kind === 'host') showInvite(session.host.room);
   await engine({
     canvas,
+    urtTransport: session.transport || session.host?.transport,
     arguments: args,
     locateFile: (f) => 'engine/' + f,
     print: (t) => console.log(t),
     printErr: (t) => console.log(t),
     preRun: [async (module) => {
       window.ioq3Module = module;
+      if (session.kind === 'host') keepRunningWhenHidden(module);
       module.addRunDependency('urt-packs');
       try {
         module.FS.mkdirTree('/q3ut4');
         for (const { name, blob } of blobs) {
           module.FS.writeFile(`/q3ut4/${name}`, new Uint8Array(await blob.arrayBuffer()), { canOwn: true });
+        }
+        if (session.kind === 'host') {
+          module.FS.writeFile('/q3ut4/mapcycle.txt', manifest.maps.join('\n') + '\n');
+          module.FS.writeFile('/q3ut4/host.cfg', [
+            `set sv_hostname "${name}'s game"`, `set sv_maxclients ${session.max}`, `set g_gametype ${session.gametype}`,
+            'set sv_pure 0', 'set auth_enable 0', 'set sv_strictauth 0', 'set g_mapcycle mapcycle.txt',
+            'set timelimit 15', 'set fraglimit 0', 'set g_followstrict 0',
+            ...[1, 2, 3, 4, 5].map((i) => `set sv_master${i} ""`), // no public master server heartbeats
+          ].join('\n') + '\n');
         }
         const cfg = localStorage.getItem(CONFIG_KEY);
         if (cfg) module.FS.writeFile('/q3ut4/q3config.cfg', cfg);
@@ -298,6 +476,32 @@ async function start(name, blobs) {
     onExit: () => location.reload(),
   });
 }
+
+// The host's browser is the server: without this, switching tabs would freeze
+// the game for everyone (hidden tabs get no animation frames, and their timers
+// are slowed to once a second; a worker's aren't).
+function keepRunningWhenHidden(module) {
+  const ticker = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 8)'])));
+  ticker.onmessage = () => { if (document.hidden && module._Sys_WebBackgroundFrame) module._Sys_WebBackgroundFrame(); };
+}
+
+function showInvite(room) {
+  const link = `${location.origin}${location.pathname}#${room}`;
+  history.replaceState(null, '', location.pathname); // a reload shouldn't make the host join itself
+  console.log(`urt: invite link ${link}`);
+  const b = $('invite');
+  b.style.display = 'block';
+  b.title = link;
+  b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(link); } catch { prompt('Invite link', link); return; }
+    const was = b.textContent;
+    b.textContent = `Copied: ${link}`;
+    setTimeout(() => { b.textContent = was; }, 2500);
+  });
+}
+document.addEventListener('pointerlockchange', () => {
+  $('invite').style.visibility = document.pointerLockElement ? 'hidden' : 'visible';
+});
 
 // The engine rewrites q3config.cfg whenever an archived setting changes;
 // copy it to localStorage so binds and settings survive reloads.
