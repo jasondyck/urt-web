@@ -48,7 +48,10 @@ The lobby gets **Host a game** / **Join a game** tabs when it finds a `config.js
 A host's browser runs the UrT server (`+map`, settings in a generated `host.cfg`); players connect to it
 over WebRTC data channels (unordered, no retransmits, so UDP-like). The engine sees ordinary IPv4 packets:
 the host is `198.18.0.1`, players get `198.19.x.y` (non-LAN addresses, so rate limits apply).
-Invite links are `<site>#ROOMCODE`; public games show up in everyone's lobby.
+Invite links are `<site>#ROOMCODE`. Listed games appear in everyone's lobby game browser (filter by mode,
+hide full; map and player count update live from the host's engine). Hosts pick a game name, optional
+password, mode, max players, game length, the mode's frag/capture limit or round length, friendly fire, and
+the map rotation. Joins refused for a wrong password or a full game return to the lobby with the reason.
 
 1. Signalling Worker: `cd signal && npx wrangler deploy`. Set `ALLOWED_ORIGINS` in `wrangler.toml` to the
    site's origin. Optional TURN for players behind strict NATs: `wrangler secret put TURN_KEY_ID` and
@@ -61,7 +64,8 @@ Caveats: the game lives in the host's tab (a worker timer keeps it running when 
 ends when the host leaves; WebRTC shows players each other's IP addresses unless traffic goes via TURN.
 
 Local test: `docker run … node:24-bookworm npx wrangler@4 dev` in `signal/`, `URT_SIGNAL_URL=http://localhost:8787 tools/dist.sh data/packed runs/p2p-site`,
-serve it, then `GPU=1 tools/pw.sh p2p.mjs http://127.0.0.1:<port>/` (Alice hosts, Bob joins by invite link; `HIDE=1` hides the host tab).
+serve it, then `GPU=1 tools/pw.sh p2p.mjs http://127.0.0.1:<port>/` (Alice hosts, Bob joins by invite link; `HIDE=1` hides the host tab)
+and `tools/pw.sh p2p-settings.mjs …` (host settings, browser listing, wrong/right password).
 
 ## Game data
 

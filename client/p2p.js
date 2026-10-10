@@ -66,7 +66,7 @@ class Link {
 
 /**
  * Open a room and accept players. Resolves once the room exists.
- * Returns { room, transport, setInfo(info), players(), close() }.
+ * Returns { room, transport, setInfo(info), players(), close() }; players() counts open data channels.
  */
 export function hostGame(signalUrl, { listed = false, onPlayers = () => {}, onStatus = () => {} } = {}) {
   const links = new Map(); // peer id -> Link
@@ -75,7 +75,7 @@ export function hostGame(signalUrl, { listed = false, onPlayers = () => {}, onSt
 
   const openCount = () => [...links.values()].filter((l) => l.channel?.readyState === 'open').length;
   const sendInfo = () => {
-    if (info && ws?.readyState === 1) ws.send(JSON.stringify({ t: 'info', ...info, players: openCount() + 1 }));
+    if (info && ws?.readyState === 1) ws.send(JSON.stringify({ t: 'info', players: openCount() + 1, ...info }));
   };
   const changed = () => { onPlayers(openCount()); sendInfo(); };
 
@@ -160,7 +160,13 @@ export function hostGame(signalUrl, { listed = false, onPlayers = () => {}, onSt
   return ready.then(() => ({
     room,
     transport,
-    setInfo(i) { info = i; sendInfo(); },
+    // listing details; sent now if anything changed, else with the 30 s refresh
+    setInfo(i) {
+      const next = { ...info, ...i };
+      if (JSON.stringify(next) === JSON.stringify(info)) return;
+      info = next;
+      sendInfo();
+    },
     players: openCount,
     close() {
       closed = true;

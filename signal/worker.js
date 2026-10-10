@@ -7,10 +7,10 @@
 //   wss://…/host[?public=1]           host opens a room; gets {t:'room', room, token, ice}
 //   wss://…/host?room=X&token=Y       host reclaims its room after a dropped connection
 //   wss://…/join/X                    player joins; gets {t:'joined', peer, ice}, host gets {t:'peer', peer}
-//   GET  /rooms                       public rooms: [{room, name, map, gametype, players, max}]
+//   GET  /rooms                       public rooms: [{room, name, map, gametype, players, max, locked, timelimit, friendlyfire}]
 //
 // Then both sides send {t:'signal', to, data} and receive {t:'signal', from, data};
-// the host is peer 0. Host sends {t:'info', name, map, gametype, players, max}
+// the host is peer 0. Host sends {t:'info', name, map, gametype, players, max, …}
 // to keep its directory entry fresh. Leaving players produce {t:'leave', peer}.
 
 const MAX_PEERS = 64;
@@ -112,9 +112,11 @@ export class Room {
       const { room, public: listed } = await this.ctx.storage.get(['room', 'public']).then((m) => Object.fromEntries(m));
       if (!listed) return;
       const clip = (s, n) => String(s ?? '').slice(0, n);
+      const int = (v, lo, hi) => Math.max(lo, Math.min(hi, v | 0));
       const entry = {
-        room, name: clip(msg.name, 40), map: clip(msg.map, 40), gametype: clip(msg.gametype, 20),
-        players: Math.max(0, Math.min(64, msg.players | 0)), max: Math.max(1, Math.min(64, msg.max | 0)),
+        room, name: clip(msg.name, 40), map: clip(msg.map, 40), gametype: int(msg.gametype, 0, 20),
+        players: int(msg.players, 0, 64), max: int(msg.max, 1, 64),
+        locked: !!msg.locked, timelimit: int(msg.timelimit, 0, 999), friendlyfire: !!msg.friendlyfire,
       };
       await directory(this.env).fetch('https://dir/put', { method: 'POST', body: JSON.stringify(entry) });
     }

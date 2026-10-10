@@ -14,7 +14,7 @@
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   #lobby { min-height: 100%; display: grid; place-items: center; padding: 24px; }
-  .card { width: min(440px, 100%); background: var(--panel); border: 1px solid var(--line);
+  .card { width: min(580px, 100%); background: var(--panel); border: 1px solid var(--line);
     border-radius: 14px; padding: 28px; box-shadow: 0 20px 60px rgb(0 0 0 / .45); }
   h1 { margin: 0 0 2px; font-size: 26px; letter-spacing: .02em; }
   .sub { margin: 0 0 22px; color: var(--dim); }
@@ -47,14 +47,31 @@
   .tabs { display: flex; gap: 4px; margin: 18px 0 0; padding: 4px; border-radius: 10px; background: #0f1318; border: 1px solid var(--line); }
   .tabs button { margin: 0; padding: 8px; font-size: 14px; background: transparent; color: var(--dim); }
   .tabs button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 0 var(--line); }
-  .games { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
-  .games .server { margin: 0; cursor: pointer; }
+  .games { display: grid; gap: 6px; max-height: 300px; overflow-y: auto; }
+  .games .server { margin: 0; cursor: pointer; padding: 10px 12px; }
+  .games .server:hover { border-color: #3a4350; }
   .games .server.on { border-color: var(--accent); }
-  .games .empty { color: var(--dim); font-size: 13px; padding: 6px 2px; }
+  .games .empty { color: var(--dim); font-size: 13px; padding: 14px 2px; text-align: center; }
+  .games .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .games .server > div:nth-child(2) { min-width: 0; }
+  .lock { font-size: 12px; margin-left: 4px; color: var(--accent); }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); margin-left: 6px; vertical-align: 1px; }
+  .full .players { color: var(--bad); }
+  .browserbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .browserbar label { margin: 0; }
+  .browserbar select { width: auto; padding: 5px 8px; font-size: 13px; }
+  .browserbar .check { margin: 0; font-size: 13px; color: var(--dim); }
+  .browserbar .count { margin-left: auto; font-size: 12px; color: var(--dim); }
+  .maps { display: flex; flex-wrap: wrap; gap: 6px; }
+  .maps button { width: auto; margin: 0; padding: 5px 10px; font-size: 13px; font-weight: 500; background: #0f1318;
+    color: var(--dim); border: 1px solid var(--line); }
+  .maps button.on { color: var(--text); border-color: var(--accent); }
+  .maps button b { display: inline-block; min-width: 1.2em; color: var(--accent); }
+  .note { font-size: 12px; color: var(--dim); margin-top: 6px; }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; min-width: 0; }
   .row > .field + .field { margin-top: 0; }
-  .row + .field { margin-top: 14px; }
+  .row + .field, .row + .row { margin-top: 14px; }
   .check { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: 14px; margin: 14px 0 0; }
   .check input { width: auto; }
   #invite { position: absolute; top: 10px; left: 10px; width: auto; margin: 0; padding: 6px 10px; font-size: 13px;
@@ -97,36 +114,66 @@
       </div>
 
       <div id="joinPanel">
-        <label>Games</label>
+        <div class="browserbar">
+          <label>Games</label>
+          <select id="modeFilter" aria-label="Filter by mode"><option value="">All modes</option></select>
+          <label class="check"><input type="checkbox" id="hideFull"> Hide full</label>
+          <span class="count" id="gameCount"></span>
+        </div>
         <div class="games" id="games"><div class="empty">Looking for games…</div></div>
-        <div class="field" id="codeField" hidden style="margin-top: 14px">
-          <label for="code">Or enter an invite code</label>
-          <input id="code" maxlength="12" autocomplete="off" spellcheck="false" placeholder="K7QM2X"
-            style="text-transform: uppercase; letter-spacing: .12em">
+        <div class="row" id="joinExtras" style="margin-top: 14px">
+          <div class="field" id="codeField" hidden>
+            <label for="code">Or enter an invite code</label>
+            <input id="code" maxlength="12" autocomplete="off" spellcheck="false" placeholder="K7QM2X"
+              style="text-transform: uppercase; letter-spacing: .12em">
+          </div>
+          <div class="field" id="joinPassField" hidden>
+            <label for="joinPass" id="joinPassLabel">Password</label>
+            <input id="joinPass" type="password" maxlength="32" autocomplete="off">
+          </div>
         </div>
       </div>
 
       <div id="hostPanel" hidden>
         <div class="row">
-          <div class="field"><label for="map">Map</label><select id="map"></select></div>
+          <div class="field"><label for="hostName">Game name</label><input id="hostName" maxlength="32"></div>
           <div class="field">
-            <label for="gametype">Mode</label>
-            <select id="gametype">
-              <option value="4">Team Survivor</option>
-              <option value="3">Team Deathmatch</option>
-              <option value="0">Free for All</option>
-              <option value="7">Capture the Flag</option>
-              <option value="8">Bomb</option>
+            <label for="hostPass">Password <span style="opacity:.7">(optional)</span></label>
+            <input id="hostPass" type="password" maxlength="32" autocomplete="new-password">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="gametype">Mode</label><select id="gametype"></select></div>
+          <div class="field">
+            <label for="maxPlayers">Max players</label>
+            <select id="maxPlayers">
+              <option>2</option><option>4</option><option>6</option><option>8</option><option selected>10</option>
+              <option>12</option><option>16</option><option>20</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="timelimit">Game length</label>
+            <select id="timelimit">
+              <option value="10">10 minutes</option><option value="15">15 minutes</option>
+              <option value="20" selected>20 minutes</option><option value="30">30 minutes</option>
+              <option value="0">No time limit</option>
+            </select>
+          </div>
+          <div class="field" id="limitField"><label for="limit" id="limitLabel">Limit</label><select id="limit"></select></div>
+          <div class="field">
+            <label for="friendlyFire">Friendly fire</label>
+            <select id="friendlyFire">
+              <option value="1">On (kicks team killers)</option><option value="2">On</option><option value="0">Off</option>
             </select>
           </div>
         </div>
         <div class="field">
-          <label for="maxPlayers">Players</label>
-          <select id="maxPlayers">
-            <option>4</option><option selected>8</option><option>12</option><option>16</option>
-          </select>
+          <label>Maps <span style="opacity:.7">(click to add or remove; played in this order)</span></label>
+          <div class="maps" id="maps"></div>
         </div>
-        <label class="check"><input type="checkbox" id="listed" checked> List it so anyone can join</label>
+        <label class="check"><input type="checkbox" id="listed" checked> List it in the game browser</label>
       </div>
 
       <button id="play" type="submit">Play</button>
@@ -170,40 +217,92 @@ const p2p = signalUrl ? await import('./p2p.js') : null;
 
 const stripColors = (s) => String(s).replace(/\^./g, '');
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const GAMETYPES = { 0: 'Free for All', 3: 'Team Deathmatch', 4: 'Team Survivor', 7: 'Capture the Flag', 8: 'Bomb' };
+// UrT 4.3 game types (Jump is left out: it needs jump maps). `limit` is the
+// mode's extra end condition besides the time limit.
+const MODES = [
+  { id: 4, name: 'Team Survivor', team: true, limit: 'round' },
+  { id: 3, name: 'Team Deathmatch', team: true, limit: 'frag' },
+  { id: 7, name: 'Capture the Flag', team: true, limit: 'capture' },
+  { id: 8, name: 'Bomb', team: true, limit: 'round' },
+  { id: 10, name: 'Freeze Tag', team: true, limit: 'round' },
+  { id: 6, name: 'Capture and Hold', team: true },
+  { id: 5, name: 'Follow the Leader', team: true, limit: 'round' },
+  { id: 0, name: 'Free for All', limit: 'frag' },
+  { id: 1, name: 'Last Man Standing', limit: 'round' },
+  { id: 11, name: 'Gun Game' },
+];
+const modeById = (id) => MODES.find((m) => m.id === +id);
+const LIMITS = {
+  frag: { label: 'Frag limit', cvar: 'fraglimit', options: [[0, 'None'], [20, '20'], [30, '30'], [50, '50'], [100, '100']], def: 0 },
+  capture: { label: 'Capture limit', cvar: 'capturelimit', options: [[0, 'None'], [3, '3'], [5, '5'], [10, '10']], def: 0 },
+  round: { label: 'Round length', cvar: 'g_RoundTime', options: [[2, '2 minutes'], [3, '3 minutes'], [4, '4 minutes'], [5, '5 minutes']], def: 3 },
+};
+// for host.cfg / the command line: no quotes, separators or line breaks
+const cfgSafe = (s) => String(s).replace(/["\;\r\n]/g, '').trim();
 
-// ---- game list -------------------------------------------------------------
-// choice: { kind: 'server', address } | { kind: 'room', room } | { kind: 'host' }
+// ---- game browser ----------------------------------------------------------
+// choice: { kind: 'server', address } | { kind: 'room', room, typed? }
 let choice = null;
 let games = [];
+// A join the server turned away (wrong password, full) comes back here with the game still picked.
+const RETRY_KEY = 'urt-web.retry';
+const retry = JSON.parse(sessionStorage.getItem(RETRY_KEY) || 'null');
+sessionStorage.removeItem(RETRY_KEY);
+if (retry) choice = retry.choice;
 const hashRoom = location.hash.replace(/^#/, '').toUpperCase();
+const sameGame = (g, c) => c && c.kind === g.kind && (c.room || c.address) === (g.room || g.address);
+
+$('modeFilter').innerHTML += MODES.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+$('modeFilter').addEventListener('change', renderGames);
+$('hideFull').addEventListener('change', renderGames);
 
 function renderGames() {
-  if (!games.length) {
-    $('games').innerHTML = `<div class="empty">${p2p ? 'No public games right now. Host one!' : 'No servers found.'}</div>`;
-    return;
+  const mode = $('modeFilter').value;
+  const shown = games.filter((g) =>
+    (!mode || g.mode === +mode) && !($('hideFull').checked && g.online && g.players >= g.max));
+  $('gameCount').textContent = games.length ? `${shown.length} of ${games.length}` : '';
+  if (!shown.length) {
+    $('games').innerHTML = `<div class="empty">${games.length ? 'No games match.'
+      : p2p ? 'No public games right now. Host one!' : 'No servers found.'}</div>`;
+  } else {
+    $('games').innerHTML = shown.map((g) => `
+      <div class="server${sameGame(g, choice) ? ' on' : ''}${g.online && g.players >= g.max ? ' full' : ''}" data-i="${games.indexOf(g)}">
+        <span class="dot ${g.online ? 'up' : 'down'}"></span>
+        <div>
+          <div class="name">${esc(stripColors(g.name))}${g.locked ? '<span class="lock" title="Password">🔒</span>' : ''}${g.kind === 'server' ? '<span class="tag">server</span>' : ''}</div>
+          <div class="meta">${esc(g.meta)}</div>
+        </div>
+        <div class="players">${g.online ? `${g.players}/${g.max}<br>players` : ''}</div>
+      </div>`).join('');
   }
-  $('games').innerHTML = games.map((g, i) => `
-    <div class="server${choice && choice.kind === g.kind && (choice.room || choice.address) === (g.room || g.address) ? ' on' : ''}" data-i="${i}">
-      <span class="dot ${g.online ? 'up' : 'down'}"></span>
-      <div>
-        <div>${esc(stripColors(g.name))}</div>
-        <div class="meta">${esc(g.meta)}</div>
-      </div>
-      <div class="players">${g.online ? `${g.players}/${g.max}<br>players` : ''}</div>
-    </div>`).join('');
+  updateJoinPassword();
 }
-$('games').addEventListener('click', (e) => {
-  const g = games[e.target.closest('[data-i]')?.dataset.i];
+
+function pick(g) {
   if (!g || !g.online) return;
   choice = g.kind === 'room' ? { kind: 'room', room: g.room } : { kind: 'server', address: g.address };
   $('code').value = '';
   renderGames();
+}
+$('games').addEventListener('click', (e) => pick(games[e.target.closest('[data-i]')?.dataset.i]));
+$('games').addEventListener('dblclick', (e) => {
+  pick(games[e.target.closest('[data-i]')?.dataset.i]);
+  if (choice) $('form').requestSubmit();
 });
 $('code').addEventListener('input', () => {
-  choice = $('code').value.trim() ? { kind: 'room', room: $('code').value.trim().toUpperCase() } : null;
+  const code = $('code').value.trim().toUpperCase();
+  choice = code ? { kind: 'room', room: code, typed: true } : null;
   renderGames();
 });
+
+// Locked games ask for the password; for an invite code we may not know, so it's optional.
+function updateJoinPassword() {
+  const listed = choice && games.find((g) => sameGame(g, choice));
+  const ask = listed ? listed.locked : choice?.kind === 'room';
+  $('joinPassField').hidden = !ask;
+  $('joinPassLabel').textContent = listed ? 'Password' : 'Password (if the game has one)';
+  $('joinExtras').hidden = $('codeField').hidden && $('joinPassField').hidden;
+}
 
 async function refreshGames() {
   const found = [];
@@ -213,24 +312,28 @@ async function refreshGames() {
       kind: 'server', address: servers.servers[0], online: !!s?.online,
       name: s?.online ? s.hostname || 'Server' : 'Server offline',
       meta: s?.online ? `${s.map} · ${s.gametype}` : 'It may be restarting',
+      mode: MODES.find((m) => m.name.toLowerCase() === String(s?.gametype).toLowerCase())?.id,
       players: s?.players?.length ?? 0, max: s?.maxPlayers ?? 0,
     });
   }
   if (p2p) {
     const rooms = await p2p.listRooms(signalUrl).catch(() => []);
     for (const r of rooms) {
+      const mode = modeById(r.gametype);
       found.push({
-        kind: 'room', room: r.room, online: true, name: r.name,
-        meta: `${r.map} · ${GAMETYPES[r.gametype] || r.gametype} · hosted in a browser`, players: r.players, max: r.max,
+        kind: 'room', room: r.room, online: true, name: r.name, locked: r.locked, mode: mode?.id,
+        meta: [r.map.replace(/^ut4_/, ''), mode?.name || `mode ${r.gametype}`,
+          r.timelimit ? `${r.timelimit} min` : 'no time limit', mode?.team && r.friendlyfire ? 'friendly fire' : '']
+          .filter(Boolean).join(' · '),
+        players: r.players, max: r.max,
       });
     }
   }
-  games = found;
-  if (!choice && !hashRoom && games.some((g) => g.online)) {
-    const g = games.find((x) => x.online);
-    choice = g.kind === 'room' ? { kind: 'room', room: g.room } : { kind: 'server', address: g.address };
-  }
-  renderGames();
+  // dedicated servers first, then the busiest games
+  games = found.sort((a, b) => (b.kind === 'server') - (a.kind === 'server')
+    || b.players - a.players || String(a.name).localeCompare(b.name));
+  if (!choice && !hashRoom && games.some((g) => g.online)) pick(games.find((g) => g.online));
+  else renderGames();
 }
 refreshGames();
 const statusTimer = setInterval(refreshGames, 5000);
@@ -302,7 +405,67 @@ $('res').value = localStorage.getItem(RES_KEY) || '1920';
   $('res').options[$('res').options.length - 1].textContent += ` – ${native}px wide`;
   if (![...$('res').options].some((o) => o.value === $('res').value)) $('res').value = $('res').options[0].value;
 }
-$('map').innerHTML = manifest.maps.map((m) => `<option value="${esc(m)}">${esc(m.replace(/^ut4_/, ''))}</option>`).join('');
+
+// ---- host form -------------------------------------------------------------
+const HOST_KEY = 'urt-web.host';
+const saved = JSON.parse(localStorage.getItem(HOST_KEY) || '{}');
+let rotation = (saved.maps || []).filter((m) => manifest.maps.includes(m));
+if (!rotation.length) rotation = [...manifest.maps];
+
+$('gametype').innerHTML = MODES.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+for (const [id, key] of [['gametype', 'gametype'], ['maxPlayers', 'max'], ['timelimit', 'timelimit'], ['friendlyFire', 'ff']]) {
+  if (saved[key] != null && [...$(id).options].some((o) => o.value === String(saved[key]))) $(id).value = String(saved[key]);
+}
+$('hostName').value = saved.name || '';
+$('listed').checked = saved.listed ?? true;
+
+function renderModeOptions() {
+  const mode = modeById($('gametype').value);
+  const limit = LIMITS[mode.limit];
+  $('limitField').hidden = !limit;
+  $('friendlyFire').closest('.field').hidden = !mode.team;
+  if (!limit) return;
+  $('limitLabel').textContent = limit.label;
+  $('limit').innerHTML = limit.options.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  const want = saved.limits?.[mode.limit] ?? limit.def;
+  $('limit').value = limit.options.some(([v]) => v === +want) ? String(want) : String(limit.def);
+}
+$('gametype').addEventListener('change', renderModeOptions);
+renderModeOptions();
+
+function renderMaps() {
+  $('maps').innerHTML = manifest.maps.map((m) => {
+    const n = rotation.indexOf(m);
+    return `<button type="button" data-map="${esc(m)}" class="${n >= 0 ? 'on' : ''}"><b>${n >= 0 ? n + 1 : ''}</b>${esc(m.replace(/^ut4_/, ''))}</button>`;
+  }).join('');
+}
+$('maps').addEventListener('click', (e) => {
+  const m = e.target.closest('[data-map]')?.dataset.map;
+  if (!m) return;
+  if (rotation.includes(m)) { if (rotation.length > 1) rotation = rotation.filter((x) => x !== m); }
+  else rotation.push(m);
+  renderMaps();
+});
+renderMaps();
+
+function hostSettings(playerName) {
+  const mode = modeById($('gametype').value);
+  const limit = LIMITS[mode.limit];
+  const s = {
+    name: cfgSafe($('hostName').value) || `${playerName}'s game`,
+    password: cfgSafe($('hostPass').value),
+    gametype: mode.id, team: !!mode.team, max: +$('maxPlayers').value, timelimit: +$('timelimit').value,
+    limit: limit && { kind: mode.limit, cvar: limit.cvar, value: +$('limit').value },
+    ff: mode.team ? +$('friendlyFire').value : 0,
+    maps: [...rotation], listed: $('listed').checked,
+  };
+  localStorage.setItem(HOST_KEY, JSON.stringify({
+    name: cfgSafe($('hostName').value), gametype: s.gametype, max: s.max, timelimit: s.timelimit,
+    ff: +$('friendlyFire').value, maps: s.maps, listed: s.listed,
+    limits: { ...saved.limits, ...(limit && { [mode.limit]: s.limit.value }) },
+  }));
+  return s;
+}
 
 let tab = 'join';
 function setTab(t) {
@@ -315,15 +478,26 @@ function setTab(t) {
 if (p2p) {
   $('tabs').hidden = false;
   $('codeField').hidden = false;
+  updateJoinPassword();
   $('hostHint').hidden = false;
   $('tabs').addEventListener('click', (e) => e.target.dataset.tab && setTab(e.target.dataset.tab));
+  $('hostName').placeholder = `${$('name').value.trim() || 'Your'}'s game`;
+  $('name').addEventListener('input', () => { $('hostName').placeholder = `${$('name').value.trim() || 'Your'}'s game`; });
   if (hashRoom) {
     $('code').value = hashRoom;
-    choice = { kind: 'room', room: hashRoom };
+    choice = { kind: 'room', room: hashRoom, typed: true };
+    updateJoinPassword();
   }
 }
 setTab('join');
 $('name').focus();
+if (retry) {
+  if (choice?.typed) $('code').value = choice.room;
+  updateJoinPassword();
+  $('progress').style.display = 'block';
+  $('status').innerHTML = `<span class="error">${esc(retry.error)}</span>`;
+  if (!$('joinPassField').hidden) $('joinPass').focus();
+}
 
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -389,34 +563,64 @@ document.addEventListener('pointerlockchange', () => {
 // server (the gateway WebSocket), a room for hosting, a data channel for joining.
 async function connect(name) {
   if (tab === 'host') {
+    const settings = hostSettings(name);
     $('status').textContent = 'Opening a game room…';
-    const map = $('map').value, gametype = +$('gametype').value, max = +$('maxPlayers').value;
     const host = await p2p.hostGame(signalUrl, {
-      listed: $('listed').checked,
-      onPlayers: (n) => { $('invite').textContent = `Copy invite link · ${n + 1} player${n ? 's' : ''}`; },
+      listed: settings.listed,
       onStatus: (s) => console.log(`urt: matchmaking ${s}`),
     });
-    host.setInfo({ name: `${name}’s game`, map, gametype, max });
-    return { kind: 'host', host, map, gametype, max };
+    host.setInfo({
+      name: settings.name, map: settings.maps[0], gametype: settings.gametype, players: 1, max: settings.max,
+      locked: !!settings.password, timelimit: settings.timelimit, friendlyfire: settings.ff > 0,
+    });
+    return { kind: 'host', host, settings };
   }
+  const password = cfgSafe($('joinPass').value);
   if (choice.kind === 'room') {
     $('status').textContent = 'Finding the game…';
     const { transport } = await p2p.joinGame(signalUrl, choice.room, {
       onStatus: (s) => { $('status').textContent = s; },
       onDisconnect: () => console.warn('urt: lost the connection to the host'),
     });
-    return { kind: 'room', transport };
+    return { kind: 'room', transport, password };
   }
-  return { kind: 'server', address: choice.address };
+  return { kind: 'server', address: choice.address, password };
+}
+
+// The server config for a game hosted in this browser.
+function hostConfig(s) {
+  return [
+    `set sv_hostname "${s.name}"`, `set sv_maxclients ${s.max}`, `set g_gametype ${s.gametype}`,
+    `set timelimit ${s.timelimit}`, 'set fraglimit 0', 'set capturelimit 0',
+    ...(s.limit ? [`set ${s.limit.cvar} ${s.limit.value}`] : []),
+    `set g_friendlyFire ${s.ff}`,
+    // the host's own client needs the password too
+    ...(s.password ? [`set g_password "${s.password}"`, `set password "${s.password}"`] : []),
+    'set sv_pure 0', 'set auth_enable 0', 'set sv_strictauth 0', 'set g_mapcycle mapcycle.txt', 'set g_followstrict 0',
+    ...[1, 2, 3, 4, 5].map((i) => `set sv_master${i} ""`), // no public master server heartbeats
+  ].join('\n') + '\n';
+}
+
+// Keep the public listing and the invite button up to date from the running server.
+function trackHostedGame(module, host) {
+  setInterval(() => {
+    try {
+      const map = module.ccall('Sys_WebCvar', 'string', ['string'], ['mapname']);
+      const players = module._SV_WebPlayerCount();
+      if (map) host.setInfo({ map, players });
+      $('invite').dataset.players = `${players} player${players === 1 ? '' : 's'}`;
+      if (!$('invite').dataset.copied) $('invite').textContent = `Copy invite link · ${$('invite').dataset.players}`;
+    } catch { /* engine still starting */ }
+  }, 3000);
 }
 
 async function start(name, blobs, session) {
   const [w, h] = renderSize();
   const net = {
-    server: ['+connect', session.address],
-    room: ['+connect', p2p?.HOST_ADDRESS],
+    server: [...(session.password ? ['+set', 'password', session.password] : []), '+connect', session.address],
+    room: [...(session.password ? ['+set', 'password', session.password] : []), '+connect', p2p?.HOST_ADDRESS],
     // settings in host.cfg (see preRun): the engine's command line is capped at 1024 chars
-    host: ['+exec', 'host.cfg', '+map', session.map],
+    host: ['+exec', 'host.cfg', '+map', session.settings?.maps[0]],
   }[session.kind];
   const args = [
     '+set', 'fs_homepath', '.',          // one search path: lookups are slow in the JS filesystem
@@ -446,11 +650,20 @@ async function start(name, blobs, session) {
     urtTransport: session.transport || session.host?.transport,
     arguments: args,
     locateFile: (f) => 'engine/' + f,
-    print: (t) => console.log(t),
-    printErr: (t) => console.log(t),
+    print: (t) => {
+      console.log(t);
+      if (session.kind !== 'host') turnedAway(t);
+    },
+    printErr: (t) => {
+      console.log(t);
+      if (session.kind !== 'host') turnedAway(t);
+    },
     preRun: [async (module) => {
       window.ioq3Module = module;
-      if (session.kind === 'host') keepRunningWhenHidden(module);
+      if (session.kind === 'host') {
+        keepRunningWhenHidden(module);
+        trackHostedGame(module, session.host);
+      }
       module.addRunDependency('urt-packs');
       try {
         module.FS.mkdirTree('/q3ut4');
@@ -458,13 +671,8 @@ async function start(name, blobs, session) {
           module.FS.writeFile(`/q3ut4/${name}`, new Uint8Array(await blob.arrayBuffer()), { canOwn: true });
         }
         if (session.kind === 'host') {
-          module.FS.writeFile('/q3ut4/mapcycle.txt', manifest.maps.join('\n') + '\n');
-          module.FS.writeFile('/q3ut4/host.cfg', [
-            `set sv_hostname "${name}'s game"`, `set sv_maxclients ${session.max}`, `set g_gametype ${session.gametype}`,
-            'set sv_pure 0', 'set auth_enable 0', 'set sv_strictauth 0', 'set g_mapcycle mapcycle.txt',
-            'set timelimit 15', 'set fraglimit 0', 'set g_followstrict 0',
-            ...[1, 2, 3, 4, 5].map((i) => `set sv_master${i} ""`), // no public master server heartbeats
-          ].join('\n') + '\n');
+          module.FS.writeFile('/q3ut4/mapcycle.txt', session.settings.maps.join('\n') + '\n');
+          module.FS.writeFile('/q3ut4/host.cfg', hostConfig(session.settings));
         }
         const cfg = localStorage.getItem(CONFIG_KEY);
         if (cfg) module.FS.writeFile('/q3ut4/q3config.cfg', cfg);
@@ -475,6 +683,16 @@ async function start(name, blobs, session) {
     }],
     onExit: () => location.reload(),
   });
+}
+
+// The engine keeps retrying a server that refused it; send the player back to
+// the lobby instead, with the reason and the same game picked.
+const REFUSALS = [[/^Invalid password/, 'Wrong password.'], [/^Server is full/, 'That game is full.']];
+function turnedAway(line) {
+  const hit = REFUSALS.find(([re]) => re.test(line.trim()));
+  if (!hit || sessionStorage.getItem(RETRY_KEY)) return;
+  sessionStorage.setItem(RETRY_KEY, JSON.stringify({ error: hit[1], choice }));
+  location.replace(location.pathname);
 }
 
 // The host's browser is the server: without this, switching tabs would freeze
@@ -494,9 +712,12 @@ function showInvite(room) {
   b.title = link;
   b.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(link); } catch { prompt('Invite link', link); return; }
-    const was = b.textContent;
+    b.dataset.copied = '1';
     b.textContent = `Copied: ${link}`;
-    setTimeout(() => { b.textContent = was; }, 2500);
+    setTimeout(() => {
+      delete b.dataset.copied;
+      b.textContent = `Copy invite link${b.dataset.players ? ` · ${b.dataset.players}` : ''}`;
+    }, 2500);
   });
 }
 document.addEventListener('pointerlockchange', () => {
