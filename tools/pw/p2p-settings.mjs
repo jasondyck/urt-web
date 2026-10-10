@@ -53,7 +53,7 @@ console.log(`${stamp()} Carol's browser: ${(await carol.textContent('#games')).r
 await carol.selectOption('#modeFilter', '4');
 console.log(`${stamp()} Carol filtered to TS: ${(await carol.textContent('#games')).replace(/\s+/g, ' ').trim()}`);
 await carol.selectOption('#modeFilter', '');
-await carol.click('#games .server');
+await carol.click('#games .server:has-text("Alice CTF night")');
 console.log(`${stamp()} Carol password field visible: ${await carol.isVisible('#joinPassField')}`);
 await carol.screenshot({ path: `${out}/settings-browser.png` });
 await carol.close();
@@ -62,7 +62,7 @@ const dave = await player('Dave');
 await dave.goto(site);
 await dave.fill('#name', 'Dave');
 await dave.waitForTimeout(2500);
-await dave.click('#games .server');
+await dave.click('#games .server:has-text("Alice CTF night")');
 await dave.fill('#joinPass', 'wrong');
 await dave.click('#play');
 await dave.waitForURL(/./, { waitUntil: 'load' });
@@ -76,7 +76,7 @@ const bob = await player('Bob');
 await bob.goto(site);
 await bob.fill('#name', 'Bob');
 await bob.waitForTimeout(2500);
-await bob.click('#games .server');
+await bob.click('#games .server:has-text("Alice CTF night")');
 await bob.fill('#joinPass', 'hunter2');
 await bob.click('#play');
 
@@ -85,7 +85,7 @@ for (const p of [alice, bob, dave]) { await p.mouse.click(550, 450); await p.key
 await alice.waitForTimeout(8000);
 const players = await alice.evaluate(() => window.ioq3Module._SV_WebPlayerCount());
 console.log(`${stamp()} Alice's server counts ${players} players; invite button: ${await alice.textContent('#invite')}`);
-const r = await (await fetch(new URL('rooms', process.env.SIGNAL || 'http://localhost:8787/'))).json();
+const r = await (await fetch(new URL('signal/rooms', site))).json();
 console.log(`${stamp()} listing: ${JSON.stringify(r)}`);
 await bob.screenshot({ path: `${out}/settings-bob.png` });
 await dave.screenshot({ path: `${out}/settings-dave.png` });

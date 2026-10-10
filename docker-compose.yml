@@ -1,42 +1,22 @@
-# Browser Urban Terror: the gateway serves the site on :8080 and relays browser
-# packets to the stock UrT server. Run ./setup.sh once before `docker compose up -d`.
+# Browser Urban Terror, self-hosted: open http://<host>:8080
+#   docker compose up -d --build
+# The first build downloads UrT 4.3.4 (1.4 GB) and compiles the engine; later
+# builds reuse the cache. Maps: server/mapcycle.txt (rebuild after changing it).
 services:
-  server:
-    image: debian:12-slim
-    restart: unless-stopped
-    user: "65534:65534"
-    entrypoint: ["/entrypoint.sh"]
-    environment:
-      HOME: /home/urt   # the UrT binary creates ~/.q3a even with fs_homepath set
-    volumes:
-      - ./data/UrbanTerror43:/urt:ro
-      - ./server/entrypoint.sh:/entrypoint.sh:ro
-      - ./server/server.cfg:/home/urt/q3ut4/server.cfg:ro
-      - ./server/mapcycle.txt:/home/urt/q3ut4/mapcycle.txt:ro
-    tmpfs:
-      - /home/urt:uid=65534,gid=65534
-    networks:
-      urt:
-        ipv4_address: 172.31.27.10
-    ports:
-      - "${URT_UDP_PORT:-27960}:27960/udp"   # optional: lets installed UrT clients join the same game
-
-  gateway:
-    build: ./gateway
+  urt-web:
+    build: .
+    image: urt-web
     restart: unless-stopped
     environment:
-      URT_SERVERS: 172.31.27.10:27960
+      URT_DEDICATED: "1"   # always-on server in the lobby; "0" = browser-hosted games only
+      URT_P2P: "1"         # players can host games in their browser; "0" = dedicated server only
+      # ICE servers for browser-hosted games. The default public STUN helps across
+      # NATs; on a LAN or VPN where players reach each other directly, "[]" keeps
+      # everything local. Add your own TURN server here if some players can't connect.
+      # URT_ICE_SERVERS: '[{"urls":"stun:stun.cloudflare.com:3478"}]'
     volumes:
-      - ./dist:/web:ro
-    networks:
-      urt:
+      # game settings; edit and `docker compose restart`
+      - ./server/server.cfg:/home/nonroot/q3ut4/server.cfg:ro
     ports:
       - "${URT_HTTP_PORT:-8080}:8080"
-    depends_on:
-      - server
-
-networks:
-  urt:
-    ipam:
-      config:
-        - subnet: 172.31.27.0/24
+      - "${URT_UDP_PORT:-27960}:27960/udp"   # optional: lets installed UrT clients join the dedicated server

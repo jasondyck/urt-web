@@ -1,9 +1,11 @@
-// urt-gateway serves the web client and relays its packets to Urban Terror servers.
+// urt-gateway serves the web client, relays its packets to Urban Terror servers,
+// and runs matchmaking for games hosted in players' browsers (signal.go).
 //
 // Browsers can't send UDP, so the client opens a WebSocket to /ws and sends binary
 // frames of [4-byte IPv4][2-byte port, big endian][payload]. Each WebSocket gets its
 // own UDP socket, so the game server sees every browser as a separate ordinary
-// player. Only servers listed in URT_SERVERS can be reached.
+// player. Only servers listed in URT_SERVERS can be reached; with none, the site
+// offers browser-hosted games only.
 package main
 
 import (
@@ -19,12 +21,14 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/coder/websocket"
@@ -38,7 +42,7 @@ const (
 
 var (
 	allowed  = map[netip.AddrPort]bool{}
-	servers  []string // as advertised to the client
+	servers  = []string{} // as advertised to the client
 	maxConns = int64(64)
 	conns    atomic.Int64
 )
@@ -47,7 +51,22 @@ func main() {
 	listen := flag.String("listen", envOr("URT_LISTEN", ":8080"), "HTTP listen address")
 	webDir := flag.String("web", envOr("URT_WEB", "./web"), "directory with the web client")
 	serverList := flag.String("servers", os.Getenv("URT_SERVERS"), "comma-separated host:port of allowed game servers; the first is the default")
+	p2p := flag.Bool("p2p", envOr("URT_P2P", "1") != "0", "offer browser-hosted games (matchmaking under /signal/)")
+	dedicated := flag.Bool("dedicated", envOr("URT_DEDICATED", "0") == "1", "also run the UrT dedicated server (see -dedicated-bin)")
+	dedBin := flag.String("dedicated-bin", envOr("URT_DEDICATED_BIN", "/urt/Quake3-UrT-Ded.x86_64"), "UrT dedicated server binary")
+	dedHome := flag.String("dedicated-home", envOr("URT_DEDICATED_HOME", "/home/nonroot"), "writable dir with q3ut4/server.cfg and q3ut4/mapcycle.txt")
+	ice := flag.String("ice", envOr("URT_ICE_SERVERS", `[{"urls":"stun:stun.cloudflare.com:3478"}]`),
+		"WebRTC ICE servers (JSON) for browser-hosted games; [] for LAN-only")
 	flag.Parse()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if *dedicated {
+		if *serverList == "" {
+			*serverList = "127.0.0.1:27960"
+		}
+		go runDedicated(ctx, dedicatedConfig{bin: *dedBin, basePath: *webDir, homePath: *dedHome, port: "27960"})
+	}
 
 	for _, s := range strings.Split(*serverList, ",") {
 		if s = strings.TrimSpace(s); s == "" {
@@ -62,22 +81,44 @@ func main() {
 		allowed[ap] = true
 		servers = append(servers, ap.String())
 	}
-	if len(servers) == 0 {
-		log.Fatal("no game servers configured (URT_SERVERS or -servers)")
+	if len(servers) == 0 && !*p2p {
+		log.Fatal("nothing to offer: no game servers (URT_SERVERS) and browser-hosted games are off (URT_P2P=0)")
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", handleWS)
-	mux.HandleFunc("/status.json", handleStatus)
+	if len(servers) > 0 {
+		mux.HandleFunc("/ws", handleWS)
+		mux.HandleFunc("/status.json", handleStatus)
+	}
 	mux.HandleFunc("/servers.json", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
-		json.NewEncoder(w).Encode(map[string]any{"servers": servers})
+		writeJSON(w, map[string]any{"servers": servers})
 	})
+	// the lobby offers hosting when config.json names a signalling endpoint
+	config := map[string]any{}
+	if *p2p {
+		newSignaller(*ice).routes(mux)
+		config["signalUrl"] = "signal/"
+	}
+	mux.HandleFunc("/config.json", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, config) })
 	mux.Handle("/", staticHandler(*webDir))
 
-	log.Printf("listening on %s, serving %s, servers %v", *listen, *webDir, servers)
-	log.Fatal(http.ListenAndServe(*listen, mux))
+	log.Printf("listening on %s, serving %s, servers %v, browser-hosted games %v", *listen, *webDir, servers, *p2p)
+	srv := &http.Server{Addr: *listen, Handler: mux}
+	go func() {
+		<-ctx.Done() // docker stop: we're PID 1, so exit (and take the game server with us)
+		shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		srv.Shutdown(shutdown)
+	}()
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(v)
 }
 
 func staticHandler(dir string) http.Handler {

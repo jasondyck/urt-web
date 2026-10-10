@@ -205,8 +205,8 @@ const NAME_KEY = 'urt-web.name';
 const RES_KEY = 'urt-web.maxWidth';
 
 // ---- configuration --------------------------------------------------------
-// config.json (optional): { "signalUrl": "https://…", "assetBase": "https://…/" }
-//   signalUrl  matchmaking Worker for browser-hosted games (signal/worker.js)
+// config.json (served by the gateway): { "signalUrl": "signal/", "assetBase": "https://…/" }
+//   signalUrl  matchmaking for browser-hosted games (gateway/signal.go); absent = hosting off
 //   assetBase  where manifest.json and the packs live, if not next to this page
 // servers.json (optional, served by the gateway): dedicated servers to offer.
 const getJson = (url) => fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);

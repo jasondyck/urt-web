@@ -1,6 +1,6 @@
 // Browser-hosted games: the host's browser runs the UrT server, players reach it
-// over WebRTC data channels, and the signalling Worker (signal/worker.js) only
-// introduces them. The engine sees ordinary IPv4 packets (see Module.urtTransport
+// over WebRTC data channels, and the gateway's matchmaking (gateway/signal.go)
+// only introduces them. The engine sees ordinary IPv4 packets (see Module.urtTransport
 // in net_ip.c): frames are [4 bytes IPv4][2 bytes port][payload], and every peer
 // gets a made-up address. 198.18.0.0/15 is a benchmarking range, so the engine
 // doesn't treat players as LAN clients (which would skip rate limits).
@@ -23,8 +23,11 @@ function frame(ip, payload) {
   return f;
 }
 
+// signalUrl may be relative to the page (the gateway serves it under signal/)
+const signalBase = (signalUrl) => new URL(signalUrl.endsWith('/') ? signalUrl : signalUrl + '/', location.href);
+
 function socketUrl(signalUrl, path) {
-  const u = new URL(path, signalUrl.endsWith('/') ? signalUrl : signalUrl + '/');
+  const u = new URL(path, signalBase(signalUrl));
   u.protocol = u.protocol === 'http:' ? 'ws:' : u.protocol === 'https:' ? 'wss:' : u.protocol;
   return u.href;
 }
@@ -239,8 +242,8 @@ function joinTransport(ch, onDisconnect) {
   };
 }
 
-// Public rooms from the signalling server.
+// Public rooms from the matchmaking server.
 export async function listRooms(signalUrl) {
-  const u = new URL('rooms', signalUrl.endsWith('/') ? signalUrl : signalUrl + '/');
+  const u = new URL('rooms', signalBase(signalUrl));
   return (await fetch(u, { cache: 'no-store' })).json();
 }

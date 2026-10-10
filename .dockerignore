@@ -1,0 +1,13 @@
+# The build only needs these; everything else (game data, build outputs, test runs) stays out.
+*
+!client/index.html
+!client/p2p.js
+!gateway/go.mod
+!gateway/go.sum
+!gateway/*.go
+!server/server.cfg
+!server/mapcycle.txt
+!tools/repack.py
+!src/ioq3
+src/ioq3/.git
+src/ioq3/build-*
