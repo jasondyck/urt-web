@@ -50,10 +50,11 @@ var (
 func main() {
 	listen := flag.String("listen", envOr("URT_LISTEN", ":8080"), "HTTP listen address")
 	webDir := flag.String("web", envOr("URT_WEB", "./web"), "directory with the web client")
+	dataDir := flag.String("data", os.Getenv("URT_DATA"), "directory with game data (manifest.json, q3ut4/*.pk3, the dedicated server binary) if not inside -web")
 	serverList := flag.String("servers", os.Getenv("URT_SERVERS"), "comma-separated host:port of allowed game servers; the first is the default")
 	p2p := flag.Bool("p2p", envOr("URT_P2P", "1") != "0", "offer browser-hosted games (matchmaking under /signal/)")
 	dedicated := flag.Bool("dedicated", envOr("URT_DEDICATED", "0") == "1", "also run the UrT dedicated server (see -dedicated-bin)")
-	dedBin := flag.String("dedicated-bin", envOr("URT_DEDICATED_BIN", "/urt/Quake3-UrT-Ded.x86_64"), "UrT dedicated server binary")
+	dedBin := flag.String("dedicated-bin", os.Getenv("URT_DEDICATED_BIN"), "UrT dedicated server binary (default: Quake3-UrT-Ded.x86_64 in the game data)")
 	dedHome := flag.String("dedicated-home", envOr("URT_DEDICATED_HOME", "/home/nonroot"), "writable dir with q3ut4/server.cfg and q3ut4/mapcycle.txt")
 	ice := flag.String("ice", envOr("URT_ICE_SERVERS", `[{"urls":"stun:stun.cloudflare.com:3478"}]`),
 		"WebRTC ICE servers (JSON) for browser-hosted games; [] for LAN-only")
@@ -61,11 +62,21 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	gameDir := *webDir
+	if *dataDir != "" {
+		gameDir = *dataDir
+	}
+	if _, err := os.Stat(filepath.Join(gameDir, "manifest.json")); err != nil {
+		log.Printf("warning: no game data in %s (run the setup container first): %v", gameDir, err)
+	}
 	if *dedicated {
 		if *serverList == "" {
 			*serverList = "127.0.0.1:27960"
 		}
-		go runDedicated(ctx, dedicatedConfig{bin: *dedBin, basePath: *webDir, homePath: *dedHome, port: "27960"})
+		if *dedBin == "" {
+			*dedBin = filepath.Join(gameDir, "Quake3-UrT-Ded.x86_64")
+		}
+		go runDedicated(ctx, dedicatedConfig{bin: *dedBin, basePath: gameDir, homePath: *dedHome, port: "27960"})
 	}
 
 	for _, s := range strings.Split(*serverList, ",") {
@@ -100,6 +111,11 @@ func main() {
 		config["signalUrl"] = "signal/"
 	}
 	mux.HandleFunc("/config.json", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, config) })
+	if *dataDir != "" {
+		data := staticHandler(*dataDir)
+		mux.Handle("/manifest.json", data)
+		mux.Handle("/q3ut4/", data)
+	}
 	mux.Handle("/", staticHandler(*webDir))
 
 	log.Printf("listening on %s, serving %s, servers %v, browser-hosted games %v", *listen, *webDir, servers, *p2p)

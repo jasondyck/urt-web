@@ -18,20 +18,26 @@ host browser: ioq3 (client + server)  <--WebRTC data channels-->  player browser
 
 ## Running it
 
-Needs Docker with compose and ~6 GB free for the first build.
+Needs Docker with compose and ~4 GB free.
 
 ```
 git clone --recurse-submodules https://github.com/jasondyck/urt-web && cd urt-web
 docker compose up -d --build   # then open http://<host>:8080
 ```
 
-The build downloads Urban Terror 4.3.4 (1.4 GB, checksum-pinned), compiles the engine to WebAssembly,
-repacks the maps in `server/mapcycle.txt` for the web (WebP textures, Ogg sounds: 5 maps ≈ 180 MB, all 35
-≈ 610 MB), and produces one ~200 MB image (distroless). The image contains FrozenSand's game files, so
-**keep it private**: don't push it to a public registry.
+Neither image contains game files:
 
-- **Maps**: `server/mapcycle.txt`, then `docker compose up -d --build`.
-- **Dedicated server settings**: `server/server.cfg` (mounted), then `docker compose restart`.
+- `urt-web` (~25 MB, distroless): gateway, WASM engine, lobby page.
+- `urt-web-setup` (one-off): on first start downloads Urban Terror 4.3.4 (1.4 GB, checksum-pinned) from
+  urbanterror.info and repacks the maps in `server/mapcycle.txt` for the web (WebP textures, Ogg sounds:
+  5 maps ≈ 180 MB, all 35 ≈ 610 MB) into the `urt-data` volume, along with the dedicated server binary.
+  Later starts see the data is current and exit at once.
+
+So the images can be shared; the game data only ever comes from FrozenSand's own download.
+
+- **Maps**: edit `server/mapcycle.txt`, then `docker compose up -d` (setup repacks; the download is kept in
+  the volume unless `URT_KEEP_DOWNLOAD=0`).
+- **Dedicated server settings**: `server/server.cfg` (mounted), then `docker compose restart urt-web`.
 - **Ports**: `URT_HTTP_PORT` (8080) for browsers; `URT_UDP_PORT` (27960) only if installed UrT clients
   should join the dedicated server too. Set them in `.env`.
 - **Environment** (in `docker-compose.yml`):
@@ -65,10 +71,11 @@ ends when the host leaves; WebRTC shows players each other's IP addresses unless
 | `client/` | lobby page (`index.html`) and the WebRTC transport for browser-hosted games (`p2p.js`) |
 | `gateway/` | Go: serves the site, relays WebSocket frames `[ipv4][port][payload]` to allowed UDP servers, matchmaking (`signal.go`), runs the dedicated server (`dedicated.go`) |
 | `server/` | dedicated server config (`sv_pure 0`, high `sv_clientsPerIp` since everyone arrives via the gateway) and map rotation |
-| `Dockerfile` | engine build, data download + repack, site assembly, distroless runtime |
+| `Dockerfile` | engine build, site assembly, distroless runtime (`urt-web`) and the data setup image (`--target setup`) |
 | `shell/` | development HTML page for the client |
 | `tools/build.sh` | builds the WASM client in the `emscripten/emsdk:4.0.1` container |
 | `tools/repack.py` | turns the UrT 4.3 pk3s into a core pack + one pack per map (WebP textures, Ogg sounds) |
+| `tools/setup-data.py` | the setup container: download, verify, repack into the data volume |
 | `tools/dist.sh` | assembles a site directory from a repack (dev) |
 | `tools/pw*`, `tools/native-ref` | headless Chromium (real GPU) tests, profiling and native-client reference harness |
 

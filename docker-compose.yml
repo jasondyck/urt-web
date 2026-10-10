@@ -1,12 +1,26 @@
 # Browser Urban Terror, self-hosted: open http://<host>:8080
 #   docker compose up -d --build
-# The first build downloads UrT 4.3.4 (1.4 GB) and compiles the engine; later
-# builds reuse the cache. Maps: server/mapcycle.txt (rebuild after changing it).
+# The images hold no game files. On first start the setup container downloads
+# Urban Terror 4.3.4 (1.4 GB) from urbanterror.info and repacks the maps in
+# server/mapcycle.txt into the urt-data volume (a few minutes); later starts
+# skip it. Changed the maps? `docker compose up -d` again redoes the repack.
 services:
+  setup:
+    build: { context: ., target: setup }
+    image: urt-web-setup
+    restart: "no"
+    environment:
+      URT_KEEP_DOWNLOAD: "1"   # keep the 1.4 GB download so map changes don't fetch it again; "0" deletes it
+    volumes:
+      - urt-data:/data
+      - ./server/mapcycle.txt:/config/mapcycle.txt:ro
+
   urt-web:
     build: .
     image: urt-web
     restart: unless-stopped
+    depends_on:
+      setup: { condition: service_completed_successfully }
     environment:
       URT_DEDICATED: "1"   # always-on server in the lobby; "0" = browser-hosted games only
       URT_P2P: "1"         # players can host games in their browser; "0" = dedicated server only
@@ -15,8 +29,12 @@ services:
       # everything local. Add your own TURN server here if some players can't connect.
       # URT_ICE_SERVERS: '[{"urls":"stun:stun.cloudflare.com:3478"}]'
     volumes:
-      # game settings; edit and `docker compose restart`
+      - urt-data:/data:ro
       - ./server/server.cfg:/home/nonroot/q3ut4/server.cfg:ro
+      - ./server/mapcycle.txt:/home/nonroot/q3ut4/mapcycle.txt:ro
     ports:
       - "${URT_HTTP_PORT:-8080}:8080"
       - "${URT_UDP_PORT:-27960}:27960/udp"   # optional: lets installed UrT clients join the dedicated server
+
+volumes:
+  urt-data:

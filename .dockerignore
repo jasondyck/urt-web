@@ -8,6 +8,7 @@
 !server/server.cfg
 !server/mapcycle.txt
 !tools/repack.py
+!tools/setup-data.py
 !src/ioq3
 src/ioq3/.git
 src/ioq3/build-*

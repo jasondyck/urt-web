@@ -19,6 +19,7 @@ import io
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -30,6 +31,9 @@ from PIL import Image
 
 WEBP_QUALITY = 85
 VORBIS_QUALITY = "3"
+# libvorbis either way; oggenc (vorbis-tools) is a far smaller install than ffmpeg
+OGG_ENCODE = ((lambda src, dst: ["oggenc", "-Q", "-q", VORBIS_QUALITY, "-o", dst, src]) if shutil.which("oggenc") else
+              (lambda src, dst: ["ffmpeg", "-v", "error", "-i", src, "-c:a", "libvorbis", "-q:a", VORBIS_QUALITY, dst]))
 DROP_EXT = {".aas", ".doc"}  # .txt must stay: UrT menus are ui/*.txt
 # Only assets under these prefixes may move into a map pack; anything else
 # (weapons, players, UI, gfx) could be used by game code, so it stays in core.
@@ -194,8 +198,7 @@ def convert(job):
             with tempfile.TemporaryDirectory() as d:
                 src, dst = os.path.join(d, "in.wav"), os.path.join(d, "out.ogg")
                 open(src, "wb").write(data)
-                r = subprocess.run(["ffmpeg", "-v", "error", "-i", src, "-c:a", "libvorbis", "-q:a", VORBIS_QUALITY, dst],
-                                   capture_output=True)
+                r = subprocess.run(OGG_ENCODE(src, dst), capture_output=True)
                 if r.returncode == 0 and os.path.getsize(dst) < len(data):
                     return strip_ext(key) + ".ogg", open(dst, "rb").read()
             return key, data
