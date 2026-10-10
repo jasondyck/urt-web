@@ -49,5 +49,5 @@ COPY --from=site /web /web
 COPY --chown=nonroot:nonroot server/server.cfg server/mapcycle.txt /home/nonroot/q3ut4/
 ENV URT_LISTEN=:8080 URT_WEB=/web URT_DATA=/data URT_DEDICATED=1
 VOLUME /data
-EXPOSE 8080 27960/udp
+EXPOSE 8080 8443 27960/udp
 ENTRYPOINT ["/urt-gateway"]

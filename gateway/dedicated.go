@@ -18,6 +18,7 @@ type dedicatedConfig struct {
 	basePath string // has q3ut4/*.pk3 (the web packs work: the server ignores textures)
 	homePath string // writable; q3ut4/server.cfg and q3ut4/mapcycle.txt live here
 	port     string
+	rcon     string // in-game admin: /rconpassword <it>, then /rcon <command>; empty = off
 }
 
 func runDedicated(ctx context.Context, c dedicatedConfig) {
@@ -31,10 +32,12 @@ func runDedicated(ctx context.Context, c dedicatedConfig) {
 				}
 			}
 		}
-		cmd := exec.CommandContext(ctx, c.bin,
-			"+set", "fs_basepath", c.basePath, "+set", "fs_homepath", c.homePath, "+set", "fs_game", "q3ut4",
-			"+set", "dedicated", "1", "+set", "net_port", c.port, "+set", "com_hunkmegs", "256",
-			"+exec", "server.cfg", "+map", firstMap)
+		args := []string{"+set", "fs_basepath", c.basePath, "+set", "fs_homepath", c.homePath, "+set", "fs_game", "q3ut4",
+			"+set", "dedicated", "1", "+set", "net_port", c.port, "+set", "com_hunkmegs", "256", "+exec", "server.cfg"}
+		if c.rcon != "" {
+			args = append(args, "+set", "rcon_password", c.rcon)
+		}
+		cmd := exec.CommandContext(ctx, c.bin, append(args, "+map", firstMap)...)
 		cmd.Env = append(os.Environ(), "HOME="+c.homePath) // the binary creates ~/.q3a regardless
 		cmd.Stdin = nil
 		out, _ := cmd.StdoutPipe()

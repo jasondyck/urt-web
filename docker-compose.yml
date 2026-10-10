@@ -1,4 +1,5 @@
-# Browser Urban Terror, self-hosted: open http://<host>:8080
+# Browser Urban Terror, self-hosted: open http://<host>:8080 (or https://<host>:8443
+# once tools/cert.sh has made a certificate in data/tls).
 #   docker compose up -d --build
 # The images hold no game files. On first start the setup container downloads
 # Urban Terror 4.3.4 (1.4 GB) from urbanterror.info and repacks the maps in
@@ -24,6 +25,9 @@ services:
     environment:
       URT_DEDICATED: "1"   # always-on server in the lobby; "0" = browser-hosted games only
       URT_P2P: "1"         # players can host games in their browser; "0" = dedicated server only
+      URT_RCON_PASSWORD: ${URT_RCON_PASSWORD:-}   # set in .env to allow /rcon on the dedicated server
+      URT_TLS_CERT: /tls/cert.pem                 # https when tools/cert.sh has made one
+      URT_TLS_KEY: /tls/key.pem
       # ICE servers for browser-hosted games. The default public STUN helps across
       # NATs; on a LAN or VPN where players reach each other directly, "[]" keeps
       # everything local. Add your own TURN server here if some players can't connect.
@@ -32,8 +36,10 @@ services:
       - urt-data:/data:ro
       - ./server/server.cfg:/home/nonroot/q3ut4/server.cfg:ro
       - ./server/mapcycle.txt:/home/nonroot/q3ut4/mapcycle.txt:ro
+      - ./data/tls:/tls:ro
     ports:
       - "${URT_HTTP_PORT:-8080}:8080"
+      - "${URT_HTTPS_PORT:-8443}:8443"
       - "${URT_UDP_PORT:-27960}:27960/udp"   # optional: lets installed UrT clients join the dedicated server
 
 volumes:

@@ -56,8 +56,12 @@ func main() {
 	dedicated := flag.Bool("dedicated", envOr("URT_DEDICATED", "0") == "1", "also run the UrT dedicated server (see -dedicated-bin)")
 	dedBin := flag.String("dedicated-bin", os.Getenv("URT_DEDICATED_BIN"), "UrT dedicated server binary (default: Quake3-UrT-Ded.x86_64 in the game data)")
 	dedHome := flag.String("dedicated-home", envOr("URT_DEDICATED_HOME", "/home/nonroot"), "writable dir with q3ut4/server.cfg and q3ut4/mapcycle.txt")
+	rcon := flag.String("rcon-password", os.Getenv("URT_RCON_PASSWORD"), "dedicated server rcon password: in game /rconpassword <it>, then /rcon <command>")
 	ice := flag.String("ice", envOr("URT_ICE_SERVERS", `[{"urls":"stun:stun.cloudflare.com:3478"}]`),
 		"WebRTC ICE servers (JSON) for browser-hosted games; [] for LAN-only")
+	tlsListen := flag.String("tls-listen", envOr("URT_TLS_LISTEN", ":8443"), "HTTPS listen address, used when the certificate exists")
+	tlsCert := flag.String("tls-cert", os.Getenv("URT_TLS_CERT"), "PEM certificate for HTTPS")
+	tlsKey := flag.String("tls-key", os.Getenv("URT_TLS_KEY"), "PEM private key for HTTPS")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -76,7 +80,7 @@ func main() {
 		if *dedBin == "" {
 			*dedBin = filepath.Join(gameDir, "Quake3-UrT-Ded.x86_64")
 		}
-		go runDedicated(ctx, dedicatedConfig{bin: *dedBin, basePath: gameDir, homePath: *dedHome, port: "27960"})
+		go runDedicated(ctx, dedicatedConfig{bin: *dedBin, basePath: gameDir, homePath: *dedHome, port: "27960", rcon: *rcon})
 	}
 
 	for _, s := range strings.Split(*serverList, ",") {
@@ -118,15 +122,32 @@ func main() {
 	}
 	mux.Handle("/", staticHandler(*webDir))
 
-	log.Printf("listening on %s, serving %s, servers %v, browser-hosted games %v", *listen, *webDir, servers, *p2p)
-	srv := &http.Server{Addr: *listen, Handler: mux}
+	httpServers := []*http.Server{{Addr: *listen, Handler: mux}}
+	// https is optional: without a certificate (tools/cert.sh) only http is served
+	if *tlsCert != "" {
+		if _, err := os.Stat(*tlsCert); err == nil {
+			log.Printf("https on %s with %s", *tlsListen, *tlsCert)
+			tls := &http.Server{Addr: *tlsListen, Handler: mux}
+			httpServers = append(httpServers, tls)
+			go func() {
+				if err := tls.ListenAndServeTLS(*tlsCert, *tlsKey); err != http.ErrServerClosed {
+					log.Fatal(err)
+				}
+			}()
+		} else {
+			log.Printf("no https: %v", err)
+		}
+	}
 	go func() {
 		<-ctx.Done() // docker stop: we're PID 1, so exit (and take the game server with us)
 		shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		srv.Shutdown(shutdown)
+		for _, s := range httpServers {
+			s.Shutdown(shutdown)
+		}
 	}()
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+	log.Printf("listening on %s, serving %s, servers %v, browser-hosted games %v", *listen, *webDir, servers, *p2p)
+	if err := httpServers[0].ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

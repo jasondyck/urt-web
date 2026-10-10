@@ -38,6 +38,9 @@ So the images can be shared; the game data only ever comes from FrozenSand's own
 - **Maps**: edit `server/mapcycle.txt`, then `docker compose up -d` (setup repacks; the download is kept in
   the volume unless `URT_KEEP_DOWNLOAD=0`).
 - **Dedicated server settings**: `server/server.cfg` (mounted), then `docker compose restart urt-web`.
+- **HTTPS**: `tools/cert.sh [extra-name-or-ip …]` makes a self-signed certificate in `data/tls`; the gateway
+  then also serves https on `URT_HTTPS_PORT` (8443). Browsers warn once per device.
+- **Admin**: `URT_RCON_PASSWORD=…` in `.env` enables `/rconpassword <it>` then `/rcon <command>` in game.
 - **Ports**: `URT_HTTP_PORT` (8080) for browsers; `URT_UDP_PORT` (27960) only if installed UrT clients
   should join the dedicated server too. Set them in `.env`.
 - **Environment** (in `docker-compose.yml`):
