@@ -85,6 +85,8 @@
   #fs { position: absolute; top: 10px; right: 10px; width: auto; margin: 0; padding: 6px 10px; font-size: 13px;
     font-weight: 600; background: rgb(22 27 34 / .8); color: var(--text); border: 1px solid var(--line); z-index: 10; }
   :fullscreen #fs { display: none; }
+  #vr { position: absolute; top: 10px; right: 128px; width: auto; margin: 0; padding: 6px 10px; font-size: 13px;
+    font-weight: 700; z-index: 10; }
 </style>
 </head>
 <body>
@@ -105,6 +107,7 @@
             <option value="1920">Up to 1080p</option>
             <option value="2560">Up to 1440p</option>
             <option value="0">Native (sharpest)</option>
+            <option value="vr" id="resVR" hidden>VR headset</option>
           </select>
         </div>
       </div>
@@ -189,12 +192,16 @@
       First visit downloads the game (<span id="size">…</span>); after that it starts from your browser's cache.
       In game: click to capture the mouse, <kbd>Esc</kbd> for the menu, <kbd>~</kbd> for the console.
       <span id="hostHint" hidden>Hosted games run in the host’s browser and end when the host leaves.</span>
+      <span id="vrHint" hidden><br>In VR: look to aim, left stick moves, right stick turns (flick up/down for weapons),
+        right trigger fires, grip zooms, A jumps, B crouches, X reloads, Y bandages, left trigger sprints,
+        left grip interacts, click the left stick for the menu (either stick moves the cursor there).</span>
     </div>
   </div>
 </main>
 <div id="game">
   <canvas id="canvas" tabindex="-1"></canvas>
   <button id="fs" type="button" title="Fullscreen (hold Esc to leave)">⛶ Fullscreen</button>
+  <button id="vr" type="button" hidden title="Play in your VR headset">Enter VR</button>
   <button id="invite" type="button" title="Copy a link others can use to join">Copy invite link</button>
 </div>
 
@@ -216,6 +223,7 @@ const [config, servers] = await Promise.all([getJson('config.json'), getJson('se
 const signalUrl = config?.signalUrl || null;
 const assetBase = new URL(config?.assetBase || './', location.href).href;
 const p2p = signalUrl ? await import('./p2p.js') : null;
+const xr = await import('./xr.js');
 
 const stripColors = (s) => String(s).replace(/\^./g, '');
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -400,6 +408,15 @@ const manifest = await (await fetch(new URL('manifest.json', assetBase), { cache
 $('size').textContent = MB(manifest.packs.reduce((n, p) => n + p.size, 0));
 $('name').value = localStorage.getItem(NAME_KEY) || '';
 $('res').value = localStorage.getItem(RES_KEY) || '1920';
+// VR: offered when a headset is there; the default in a headset's own browser
+let vrSupported = false;
+xr.vrSupported().then((ok) => {
+  vrSupported = ok;
+  if (!ok) return;
+  $('resVR').hidden = false;
+  $('vrHint').hidden = false;
+  if (!localStorage.getItem(RES_KEY) && /OculusBrowser|Quest|Pico|Wolvic/i.test(navigator.userAgent)) $('res').value = 'vr';
+});
 // only offer what this screen can use
 {
   const native = Math.round(screen.width * (devicePixelRatio || 1));
@@ -540,6 +557,8 @@ $('form').addEventListener('submit', async (e) => {
 // the window. Changing size later would need vid_restart, which recreates the
 // WebGL context mid-game.
 function renderSize() {
+  // about one eye's shape and size; each eye shows the canvas
+  if ($('res').value === 'vr') return [1440, 1520];
   const dpr = devicePixelRatio || 1;
   let w = screen.width * dpr, h = screen.height * dpr;
   const cap = +$('res').value || w;
@@ -557,9 +576,24 @@ async function fullscreen() {
   captureMouse();
 }
 $('fs').addEventListener('click', fullscreen);
-// only show the button while the mouse is free (menus, after Esc)
+// only show the buttons while the mouse is free (menus, after Esc)
 document.addEventListener('pointerlockchange', () => {
-  $('fs').style.visibility = document.pointerLockElement ? 'hidden' : 'visible';
+  $('fs').style.visibility = $('vr').style.visibility = document.pointerLockElement ? 'hidden' : 'visible';
+});
+
+$('vr').addEventListener('click', async () => {
+  const b = $('vr');
+  b.disabled = true;
+  try {
+    await xr.enterVR(window.ioq3Module, {
+      onEnd: () => { b.disabled = false; b.textContent = 'Enter VR'; $('canvas').focus(); },
+    });
+    b.textContent = 'In VR';
+  } catch (err) {
+    console.error('urt: VR', err);
+    b.disabled = false;
+    b.textContent = 'VR failed: ' + (err.message || err);
+  }
 });
 // SDL only re-requests pointer lock from mousedown, and only if its own
 // request went through earlier; Safari can refuse both, leaving a free cursor
@@ -671,6 +705,10 @@ async function start(name, blobs, session) {
     ...net,
   ];
   const engine = (await import('./engine/ioquake3.js')).default;
+  if (vrSupported) {
+    xr.makeContextsXRCompatible();
+    $('vr').hidden = false;
+  }
   clearInterval(statusTimer);
   $('lobby').style.display = 'none';
   $('game').style.display = 'block';
@@ -732,7 +770,8 @@ function turnedAway(line) {
 // are slowed to once a second; a worker's aren't).
 function keepRunningWhenHidden(module) {
   const ticker = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 8)'])));
-  ticker.onmessage = () => { if (document.hidden && module._Sys_WebBackgroundFrame) module._Sys_WebBackgroundFrame(); };
+  // (in VR the headset runs the frames, whatever the page's visibility)
+  ticker.onmessage = () => { if (document.hidden && !module.urtXR && module._Sys_WebBackgroundFrame) module._Sys_WebBackgroundFrame(); };
 }
 
 function showInvite(room) {

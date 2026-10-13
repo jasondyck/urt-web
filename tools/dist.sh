@@ -8,7 +8,7 @@ OUT=${2:-dist}
 ENGINE=src/ioq3/build-web/Release
 
 rm -rf "$OUT.tmp" && mkdir -p "$OUT.tmp/engine" "$OUT.tmp/q3ut4"
-cp client/index.html client/p2p.js "$OUT.tmp/"
+cp client/index.html client/p2p.js client/xr.js "$OUT.tmp/"
 cp "$ENGINE/ioquake3.js" "$ENGINE/ioquake3.wasm" "$OUT.tmp/engine/"
 cp "$PACKED/manifest.json" "$OUT.tmp/"
 python3 - "$PACKED" "$OUT.tmp" <<'PY'
@@ -22,7 +22,7 @@ for p in json.load(open(os.path.join(packed, "manifest.json")))["packs"]:
         shutil.copy2(src, dst)
 PY
 # packs are already compressed; the page and engine shrink a lot
-for f in "$OUT.tmp/index.html" "$OUT.tmp/p2p.js" "$OUT.tmp/manifest.json" "$OUT.tmp/engine/ioquake3.js" "$OUT.tmp/engine/ioquake3.wasm"; do
+for f in "$OUT.tmp/index.html" "$OUT.tmp/p2p.js" "$OUT.tmp/xr.js" "$OUT.tmp/manifest.json" "$OUT.tmp/engine/ioquake3.js" "$OUT.tmp/engine/ioquake3.wasm"; do
   gzip -9 -k -n "$f"
 done
 # swap contents in place: a running container's bind mount keeps pointing at
