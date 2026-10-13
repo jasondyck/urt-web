@@ -20,9 +20,9 @@ RUN emcmake cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/nu
 
 # ---- site: lobby page + engine (the game data is served from the volume) -----
 FROM debian:12-slim AS site
-COPY client/index.html client/p2p.js /web/
+COPY client/index.html client/p2p.js client/xr.js /web/
 COPY --from=engine /out/ /web/engine/
-RUN cd /web && gzip -9 -k -n index.html p2p.js engine/ioquake3.js engine/ioquake3.wasm
+RUN cd /web && gzip -9 -k -n index.html p2p.js xr.js engine/ioquake3.js engine/ioquake3.wasm
 
 # ---- gateway ------------------------------------------------------------------
 FROM golang:1.25 AS gateway

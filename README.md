@@ -66,12 +66,34 @@ password or full game sends the player back to the lobby with the reason.
 Caveats: the game lives in the host's tab (a worker timer keeps it running when the tab is hidden) and
 ends when the host leaves; WebRTC shows players each other's IP addresses unless traffic goes via TURN.
 
+## VR headsets (WebXR)
+
+In a browser with WebXR and a headset (Quest Browser, or Chrome/Edge with a PC headset), the game page
+shows **Enter VR**, and the lobby's resolution list gets a **VR headset** size (1440×1520, about one
+eye; the default in a headset's own browser). WebXR needs a secure context: use the HTTPS port
+(`tools/cert.sh`) unless the page is on `localhost`.
+
+- Look to aim (the crosshair stays in the middle of the view); the head's roll, small leans and the
+  two eyes are added by the renderer. The HUD and menus sit in a 4:3 window straight ahead.
+- Left stick moves; right stick snap-turns 45° (flick up/down for next/previous weapon). Right trigger
+  fires, right grip zooms, A jumps, B crouches, X reloads, Y bandages, left trigger sprints, left grip
+  interacts, right stick click shows scores, left stick click opens the menu, where either stick moves
+  the cursor and the trigger clicks. Buttons press the keys of UrT's default layout (`MOUSE1`, `SPACE`,
+  `c`, `r`, `q`, `e`, `CTRL`, `TAB`, `ESCAPE`, mouse wheel), so rebinding those keys rebinds them.
+- Cvars: `xr_snapTurn` (degrees, 0 = smooth at `xr_turnSpeed`), `xr_worldScale` (game units per meter,
+  32), `xr_hudSize` (0.5), `xr_hudDepth` (meters, 0 = at infinity), `xr_leanRange` (meters, 0.3).
+
+How it works: `client/xr.js` runs the engine from the session's frames; the engine draws a whole frame
+per eye into the canvas with the headset's off-center frustum and the page scales each into its half of
+the XR framebuffer (`code/client/cl_webxr.c`, `code/renderercommon/tr_webxr.h`). Tested with a fake
+headset (`tools/pw.sh xr.mjs <url>`, writes both-eye snapshots to `runs/`), not yet on real hardware.
+
 ## Layout
 
 | Path | What |
 |---|---|
 | `src/ioq3` | submodule: ioquake3 fork, branch `urt` (UrT UI syscalls, pluggable network transport, WebP textures, WebGL fixes, QVM→wasm compiler, load/memory optimizations) |
-| `client/` | lobby page (`index.html`) and the WebRTC transport for browser-hosted games (`p2p.js`) |
+| `client/` | lobby page (`index.html`), the WebRTC transport for browser-hosted games (`p2p.js`) and VR (`xr.js`) |
 | `gateway/` | Go: serves the site, relays WebSocket frames `[ipv4][port][payload]` to allowed UDP servers, matchmaking (`signal.go`), runs the dedicated server (`dedicated.go`) |
 | `server/` | dedicated server config (`sv_pure 0`, high `sv_clientsPerIp` since everyone arrives via the gateway) and map rotation |
 | `Dockerfile` | engine build, site assembly, distroless runtime (`urt-web`) and the data setup image (`--target setup`) |
